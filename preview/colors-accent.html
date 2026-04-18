@@ -1,0 +1,27 @@
+<!DOCTYPE html>
+<html lang="ko"><head><meta charset="utf-8"/>
+<link rel="stylesheet" href="../colors_and_type.css"/>
+<style>
+body{margin:0;padding:20px;background:var(--bg-app);}
+.grid{display:grid;grid-template-columns:repeat(4,1fr);gap:10px;}
+.sw{border-radius:var(--radius-md);padding:14px;min-height:84px;display:flex;flex-direction:column;justify-content:space-between;}
+.sw .name{font-family:var(--font-mono);font-size:11px;}
+.sw .hex{font-family:var(--font-mono);font-size:11px;opacity:.75;}
+.sw .lbl{font-family:var(--font-body);font-weight:600;font-size:13px;}
+.label{font-family:var(--font-body);font-size:12px;letter-spacing:.04em;text-transform:uppercase;color:var(--fg-soft);margin:4px 0 6px;}
+</style></head><body>
+<div class="label">CLAY — primary accent</div>
+<div class="grid">
+  <div class="sw" style="background:var(--clay-soft);color:var(--clay-3)"><div><div class="lbl">soft</div></div><div class="hex">#F4E0D3</div></div>
+  <div class="sw" style="background:var(--clay-1);color:#fff"><div><div class="lbl">clay-1</div></div><div class="hex">#D17A57</div></div>
+  <div class="sw" style="background:var(--clay-2);color:#fff"><div><div class="lbl">clay-2 ★</div></div><div class="hex">#B45A3C</div></div>
+  <div class="sw" style="background:var(--clay-3);color:#fff"><div><div class="lbl">clay-3</div></div><div class="hex">#8E4427</div></div>
+</div>
+<div class="label" style="margin-top:14px">MOSS — secondary accent</div>
+<div class="grid">
+  <div class="sw" style="background:var(--moss-soft);color:var(--moss-3)"><div><div class="lbl">soft</div></div><div class="hex">#E4E8D9</div></div>
+  <div class="sw" style="background:var(--moss-1);color:#fff"><div><div class="lbl">moss-1</div></div><div class="hex">#8A9A6C</div></div>
+  <div class="sw" style="background:var(--moss-2);color:#fff"><div><div class="lbl">moss-2 ★</div></div><div class="hex">#6B7A4F</div></div>
+  <div class="sw" style="background:var(--moss-3);color:#fff"><div><div class="lbl">moss-3</div></div><div class="hex">#4E5A39</div></div>
+</div>
+</body></html>

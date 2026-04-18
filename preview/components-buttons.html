@@ -1,0 +1,23 @@
+<!DOCTYPE html>
+<html lang="ko"><head><meta charset="utf-8"/>
+<link rel="stylesheet" href="../colors_and_type.css"/>
+<style>
+body{margin:0;padding:24px;background:var(--bg-app);display:flex;gap:12px;flex-wrap:wrap;align-items:center;}
+.btn{font-family:var(--font-body);font-size:14px;font-weight:500;padding:9px 18px;border-radius:8px;cursor:pointer;border:1px solid transparent;transition:all 150ms var(--ease-out);}
+.primary{background:var(--clay-2);color:#fff;box-shadow:var(--shadow-sm);}
+.primary:hover{background:var(--clay-1);box-shadow:var(--shadow-md);}
+.secondary{background:var(--paper-2);color:var(--ink-1);border-color:var(--border-soft);}
+.secondary:hover{background:var(--paper-3);}
+.ghost{background:transparent;color:var(--ink-2);}
+.ghost:hover{background:var(--paper-2);}
+.danger{background:transparent;color:var(--danger);border-color:var(--danger-soft);}
+.danger:hover{background:var(--danger-soft);}
+.sm{padding:6px 12px;font-size:13px;border-radius:6px;}
+</style></head><body>
+<button class="btn primary">새 글 쓰기</button>
+<button class="btn secondary">취소</button>
+<button class="btn ghost">돌아가기</button>
+<button class="btn danger">삭제</button>
+<button class="btn primary sm">저장</button>
+<button class="btn secondary sm">불러오기</button>
+</body></html>

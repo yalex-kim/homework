@@ -1,0 +1,54 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="utf-8"/>
+<title>yAlex's HomeWork — UI Kit</title>
+<link rel="stylesheet" href="../../colors_and_type.css"/>
+<link rel="stylesheet" href="webapp.css"/>
+<script src="https://unpkg.com/@phosphor-icons/web@2.1.1"></script>
+<script src="https://unpkg.com/react@18.3.1/umd/react.development.js" integrity="sha384-hD6/rw4ppMLGNu3tX5cjIb+uRZ7UkRJ6BPkLpg4hAu/6onKUg4lLsHAs9EBPT82L" crossorigin="anonymous"></script>
+<script src="https://unpkg.com/react-dom@18.3.1/umd/react-dom.development.js" integrity="sha384-u6aeetuaXnQ38mYT8rp6sbXaQe3NL9t+IBXmnYxwkUI2Hw4bsp2Wvmx4yRQF1uAm" crossorigin="anonymous"></script>
+<script src="https://unpkg.com/@babel/standalone@7.29.0/babel.min.js" integrity="sha384-m08KidiNqLdpJqLq95G/LEi8Qvjl/xUYll3QILypMoQ65QorJ9Lvtp2RXYGBFj1y" crossorigin="anonymous"></script>
+</head>
+<body>
+<div id="root"></div>
+<script type="text/babel" src="Sidebar.jsx"></script>
+<script type="text/babel" src="LoginScreen.jsx"></script>
+<script type="text/babel" src="Pages.jsx"></script>
+<script type="text/babel">
+const { useState, useEffect } = React;
+
+function App() {
+  const [user, setUser] = useState(null);
+  const [route, setRoute] = useState(() => localStorage.getItem('yh_route') || 'today');
+  useEffect(() => { localStorage.setItem('yh_route', route); }, [route]);
+
+  if (!user) return <LoginScreen onLogin={setUser} />;
+
+  const page = (() => {
+    switch (route) {
+      case 'today': return <TodayPage onNav={setRoute} />;
+      case 'todo': return <TodoPage />;
+      case 'journal': return <JournalPage />;
+      case 'travel': return <TravelPage />;
+      case 'stocks': return <StocksPage />;
+      case 'calendar': return <EmptyPage title="캘린더" icon="calendar-blank" message="아직 비어 있는 달력이에요." />;
+      case 'notes': return <EmptyPage title="노트" icon="pencil-line" message="첫 번째 노트를 써보세요." />;
+      case 'bookmarks': return <EmptyPage title="북마크" icon="bookmark-simple" message="모아둔 링크가 여기 쌓일 거예요." />;
+      case 'budget': return <EmptyPage title="가계부" icon="wallet" message="이번 달의 숫자들이 기다리고 있어요." />;
+      default: return <TodayPage onNav={setRoute} />;
+    }
+  })();
+
+  return (
+    <div className="app-shell">
+      <Sidebar active={route} onNav={setRoute} user={user} onLogout={() => setUser(null)} />
+      <main className="main">{page}</main>
+    </div>
+  );
+}
+
+ReactDOM.createRoot(document.getElementById('root')).render(<App />);
+</script>
+</body>
+</html>

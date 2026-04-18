@@ -1,0 +1,28 @@
+<!DOCTYPE html>
+<html lang="ko"><head><meta charset="utf-8"/>
+<link rel="stylesheet" href="../colors_and_type.css"/>
+<style>
+body{margin:0;padding:24px;background:var(--bg-app);display:flex;flex-direction:column;gap:10px;align-items:flex-start;}
+.badge{display:inline-flex;align-items:center;gap:6px;padding:3px 10px;border-radius:9999px;font-size:12px;font-family:var(--font-body);font-weight:500;}
+.b-clay{background:var(--clay-soft);color:var(--clay-3);}
+.b-moss{background:var(--moss-soft);color:var(--moss-3);}
+.b-danger{background:var(--danger-soft);color:var(--danger-2);}
+.b-info{background:var(--info-soft);color:var(--info-2);}
+.b-paper{background:var(--paper-3);color:var(--ink-2);}
+.dot{width:6px;height:6px;border-radius:50%;background:currentColor;}
+.group{display:flex;gap:8px;flex-wrap:wrap;}
+</style></head><body>
+<div class="group">
+  <span class="badge b-clay"><span class="dot"></span>진행 중</span>
+  <span class="badge b-moss"><span class="dot"></span>완료</span>
+  <span class="badge b-danger"><span class="dot"></span>오늘 마감</span>
+  <span class="badge b-info"><span class="dot"></span>보류</span>
+  <span class="badge b-paper">초안</span>
+</div>
+<div class="group">
+  <span class="badge b-paper">여행</span>
+  <span class="badge b-paper">가족</span>
+  <span class="badge b-paper">일기</span>
+  <span class="badge b-paper">주식</span>
+</div>
+</body></html>

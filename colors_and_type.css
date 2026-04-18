@@ -1,0 +1,215 @@
+/* ===========================================================
+   yAlex's HomeWork — Design Tokens
+   Warm & cozy. 종이, 나무, 저녁 램프 불빛.
+   =========================================================== */
+
+/* Google Fonts + Pretendard (한국어) */
+@import url('https://fonts.googleapis.com/css2?family=Lora:ital,wght@0,400;0,500;0,600;0,700;1,400&family=JetBrains+Mono:wght@400;500;700&display=swap');
+@import url('https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/static/pretendard.css');
+
+:root {
+  /* Paper / Surfaces */
+  --paper-0: #FDFAF4;
+  --paper-1: #FBF6ED;
+  --paper-2: #F3EADA;
+  --paper-3: #E8DCC6;
+  --paper-4: #D7C6A8;
+
+  /* Ink / Text */
+  --ink-1: #2D2520;
+  --ink-2: #5B4A3E;
+  --ink-3: #8C7F72;
+  --ink-4: #B8AD9F;
+
+  /* Accent — Clay */
+  --clay-1: #D17A57;
+  --clay-2: #B45A3C;
+  --clay-3: #8E4427;
+  --clay-soft: #F4E0D3;
+
+  /* Accent — Moss */
+  --moss-1: #8A9A6C;
+  --moss-2: #6B7A4F;
+  --moss-3: #4E5A39;
+  --moss-soft: #E4E8D9;
+
+  /* Semantic */
+  --danger-1: #C76A5A;
+  --danger-2: #9B4A3A;
+  --danger-soft: #F2DCD4;
+  --info-1: #7A8896;
+  --info-2: #556373;
+  --info-soft: #DDE3E8;
+
+  /* Borders */
+  --border-soft: #EADFC9;
+  --border-mid: #D9C9AC;
+  --border-strong: #B8A583;
+
+  /* Semantic mapping */
+  --bg-app: var(--paper-0);
+  --bg-surface: var(--paper-1);
+  --bg-card: var(--paper-2);
+  --bg-hover: var(--paper-2);
+  --bg-active: var(--paper-3);
+  --bg-sidebar: var(--paper-1);
+
+  --fg-default: var(--ink-1);
+  --fg-muted: var(--ink-2);
+  --fg-soft: var(--ink-3);
+  --fg-disabled: var(--ink-4);
+
+  --accent: var(--clay-2);
+  --accent-hover: var(--clay-1);
+  --accent-press: var(--clay-3);
+  --accent-soft: var(--clay-soft);
+
+  --success: var(--moss-2);
+  --success-soft: var(--moss-soft);
+  --danger: var(--danger-2);
+  --danger-soft: var(--danger-soft);
+  --link: var(--clay-2);
+  --link-hover: var(--clay-1);
+
+  /* Typography */
+  --font-display: 'Lora', 'Pretendard', Georgia, serif;
+  --font-body: 'Pretendard', -apple-system, BlinkMacSystemFont, 'Apple SD Gothic Neo', sans-serif;
+  --font-mono: 'JetBrains Mono', 'SF Mono', Menlo, monospace;
+
+  --fs-xs: 12px;
+  --fs-sm: 13px;
+  --fs-base: 15px;
+  --fs-md: 16px;
+  --fs-lg: 18px;
+  --fs-xl: 22px;
+  --fs-2xl: 28px;
+  --fs-3xl: 36px;
+  --fs-4xl: 48px;
+
+  --lh-tight: 1.2;
+  --lh-snug: 1.4;
+  --lh-normal: 1.6;
+  --lh-loose: 1.8;
+
+  --fw-regular: 400;
+  --fw-medium: 500;
+  --fw-semibold: 600;
+  --fw-bold: 700;
+
+  --ls-tight: -0.02em;
+  --ls-normal: 0;
+  --ls-wide: 0.04em;
+
+  /* Spacing */
+  --space-1: 4px;
+  --space-2: 8px;
+  --space-3: 12px;
+  --space-4: 16px;
+  --space-5: 24px;
+  --space-6: 32px;
+  --space-7: 48px;
+  --space-8: 64px;
+  --space-9: 96px;
+
+  /* Radius */
+  --radius-xs: 4px;
+  --radius-sm: 6px;
+  --radius-md: 8px;
+  --radius-lg: 12px;
+  --radius-xl: 16px;
+  --radius-full: 9999px;
+
+  /* Shadows — warm, brown-tinted */
+  --shadow-sm: 0 1px 2px rgba(74, 58, 47, 0.06), 0 1px 1px rgba(74, 58, 47, 0.04);
+  --shadow-md: 0 4px 12px rgba(74, 58, 47, 0.08), 0 1px 2px rgba(74, 58, 47, 0.05);
+  --shadow-lg: 0 12px 32px rgba(74, 58, 47, 0.10), 0 2px 6px rgba(74, 58, 47, 0.06);
+  --shadow-inset: inset 0 1px 2px rgba(74, 58, 47, 0.05);
+
+  /* Motion */
+  --ease-out: cubic-bezier(0.22, 0.61, 0.36, 1);
+  --ease-in-out: cubic-bezier(0.4, 0, 0.2, 1);
+  --dur-fast: 150ms;
+  --dur-base: 240ms;
+  --dur-slow: 400ms;
+
+  /* Layout */
+  --sidebar-width: 240px;
+  --content-max: 840px;
+  --gallery-max: 1200px;
+}
+
+* { box-sizing: border-box; }
+
+html, body {
+  margin: 0;
+  padding: 0;
+  background: var(--bg-app);
+  color: var(--fg-default);
+  font-family: var(--font-body);
+  font-size: var(--fs-base);
+  line-height: var(--lh-normal);
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+/* Paper grain overlay */
+.paper-grain { position: relative; }
+.paper-grain::before {
+  content: '';
+  position: absolute; inset: 0;
+  pointer-events: none;
+  background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='160' height='160'><filter id='n'><feTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='2' seed='2'/><feColorMatrix values='0 0 0 0 0.3  0 0 0 0 0.22  0 0 0 0 0.14  0 0 0 0.04 0'/></filter><rect width='100%25' height='100%25' filter='url(%23n)'/></svg>");
+  opacity: 0.5;
+  mix-blend-mode: multiply;
+  z-index: 0;
+}
+
+/* Type — semantic */
+h1, .h1 {
+  font-family: var(--font-display);
+  font-size: var(--fs-3xl);
+  font-weight: var(--fw-semibold);
+  line-height: var(--lh-tight);
+  letter-spacing: var(--ls-tight);
+  color: var(--fg-default);
+  margin: 0 0 var(--space-4);
+}
+h2, .h2 {
+  font-family: var(--font-display);
+  font-size: var(--fs-2xl);
+  font-weight: var(--fw-semibold);
+  line-height: var(--lh-tight);
+  letter-spacing: var(--ls-tight);
+  margin: 0 0 var(--space-3);
+}
+h3, .h3 {
+  font-family: var(--font-display);
+  font-size: var(--fs-xl);
+  font-weight: var(--fw-medium);
+  line-height: var(--lh-snug);
+  margin: 0 0 var(--space-3);
+}
+h4, .h4 {
+  font-family: var(--font-body);
+  font-size: var(--fs-lg);
+  font-weight: var(--fw-semibold);
+  line-height: var(--lh-snug);
+  margin: 0 0 var(--space-2);
+}
+.eyebrow {
+  font-family: var(--font-body);
+  font-size: var(--fs-xs);
+  font-weight: var(--fw-medium);
+  letter-spacing: var(--ls-wide);
+  text-transform: uppercase;
+  color: var(--fg-soft);
+}
+p, .p { margin: 0 0 var(--space-4); color: var(--fg-default); line-height: var(--lh-normal); }
+.lead { font-size: var(--fs-lg); color: var(--fg-muted); line-height: var(--lh-normal); }
+.small { font-size: var(--fs-sm); color: var(--fg-muted); }
+.caption { font-size: var(--fs-xs); color: var(--fg-soft); }
+code, .mono { font-family: var(--font-mono); font-size: 0.92em; }
+.serif-italic { font-family: var(--font-display); font-style: italic; color: var(--fg-muted); }
+
+a { color: var(--link); text-decoration: none; transition: color var(--dur-fast) var(--ease-out); }
+a:hover { color: var(--link-hover); text-decoration: underline; text-underline-offset: 3px; text-decoration-thickness: 1px; }

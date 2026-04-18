@@ -1,0 +1,24 @@
+<!DOCTYPE html>
+<html lang="ko"><head><meta charset="utf-8"/>
+<link rel="stylesheet" href="../colors_and_type.css"/>
+<style>
+body{margin:0;padding:24px;background:var(--bg-app);display:flex;flex-direction:column;gap:12px;max-width:420px;}
+.field{display:flex;flex-direction:column;gap:6px;}
+label{font-size:12px;font-weight:500;color:var(--fg-muted);letter-spacing:.02em;}
+input,textarea{font-family:var(--font-body);font-size:14px;padding:10px 12px;background:var(--paper-0);border:1px solid var(--border-mid);border-radius:6px;color:var(--ink-1);outline:none;transition:border-color 150ms;}
+input:focus,textarea:focus{border-color:var(--clay-2);box-shadow:0 0 0 3px var(--clay-soft);}
+textarea{resize:vertical;min-height:60px;font-family:var(--font-body);}
+</style></head><body>
+<div class="field">
+  <label>제목</label>
+  <input value="오늘의 생각"/>
+</div>
+<div class="field">
+  <label>내용</label>
+  <textarea placeholder="아직 쓰지 않은 날이에요...">작년 봄 교토의 골목길을 떠올렸다.</textarea>
+</div>
+<div class="field">
+  <label>태그</label>
+  <input placeholder="여행, 가족, 기억"/>
+</div>
+</body></html>

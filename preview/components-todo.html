@@ -1,0 +1,20 @@
+<!DOCTYPE html>
+<html lang="ko"><head><meta charset="utf-8"/>
+<link rel="stylesheet" href="../colors_and_type.css"/>
+<style>
+body{margin:0;padding:20px;background:var(--bg-app);display:flex;flex-direction:column;gap:10px;max-width:480px;}
+.todo{display:flex;align-items:flex-start;gap:12px;padding:10px 14px;border-radius:8px;background:var(--paper-1);border:1px solid var(--border-soft);transition:background 150ms;}
+.todo:hover{background:var(--paper-2);}
+.chk{width:18px;height:18px;border:1.5px solid var(--ink-3);border-radius:4px;flex:none;margin-top:2px;background:transparent;cursor:pointer;display:flex;align-items:center;justify-content:center;}
+.chk.on{background:var(--moss-2);border-color:var(--moss-2);color:#fff;font-size:11px;}
+.txt{flex:1;font-size:14px;color:var(--ink-1);}
+.txt.done{color:var(--ink-3);text-decoration:line-through;}
+.tag{font-family:var(--font-mono);font-size:10px;padding:2px 6px;border-radius:4px;background:var(--clay-soft);color:var(--clay-3);}
+.tag.wife{background:var(--clay-soft);color:var(--clay-3);}
+.tag.self{background:var(--moss-soft);color:var(--moss-3);}
+</style></head><body>
+<div class="todo"><div class="chk on">✓</div><div class="txt done">우유 사오기</div><div class="tag wife">아내</div></div>
+<div class="todo"><div class="chk"></div><div class="txt">주말 여행지 검색해보기</div><div class="tag wife">아내</div></div>
+<div class="todo"><div class="chk"></div><div class="txt">4월 주식 포트폴리오 리밸런싱</div><div class="tag self">나</div></div>
+<div class="todo"><div class="chk"></div><div class="txt">가족 앨범 정리 (교토 폴더)</div><div class="tag self">나</div></div>
+</body></html>
