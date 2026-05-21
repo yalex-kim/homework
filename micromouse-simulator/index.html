@@ -1,0 +1,95 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>마이크로마우스 시뮬레이터</title>
+    <link rel="stylesheet" href="css/style.css">
+    <!-- CodeMirror via CDN -->
+    <link  rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/codemirror.min.css">
+    <link  rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/theme/dracula.min.css">
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/codemirror.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/mode/javascript/javascript.min.js"></script>
+</head>
+<body>
+<div id="app">
+
+    <!-- ── Toolbar ──────────────────────────────────────────────────────── -->
+    <header id="toolbar">
+        <h1>🐭 마이크로마우스 시뮬레이터</h1>
+        <div class="controls">
+            <button id="btn-start"    class="btn-primary">▶ 시작</button>
+            <button id="btn-stop"     class="btn-secondary">⏹ 정지</button>
+            <button id="btn-reset"    class="btn-secondary">↺ 리셋</button>
+            <button id="btn-new-maze" class="btn-secondary">🔀 새 미로</button>
+            <div class="speed-control">
+                <label for="speed-slider">속도</label>
+                <input type="range" id="speed-slider" min="1" max="10" value="5">
+                <span id="speed-val">5</span>
+            </div>
+        </div>
+    </header>
+
+    <!-- ── Main content ─────────────────────────────────────────────────── -->
+    <div id="main">
+
+        <!-- Canvas + status -->
+        <div id="canvas-panel">
+            <canvas id="maze-canvas"></canvas>
+            <div id="status-bar">
+                <div class="stat">
+                    <span class="stat-label">위치</span>
+                    <span class="stat-value" id="stat-pos">(0, 15)</span>
+                </div>
+                <div class="stat">
+                    <span class="stat-label">방향</span>
+                    <span class="stat-value" id="stat-dir">북 ↑</span>
+                </div>
+                <div class="stat">
+                    <span class="stat-label">이동거리</span>
+                    <span class="stat-value" id="stat-odo">0 칸</span>
+                </div>
+                <div class="stat">
+                    <span class="stat-label">자이로</span>
+                    <span class="stat-value" id="stat-gyro">0.0°/s</span>
+                </div>
+                <div class="stat">
+                    <span class="stat-label">상태</span>
+                    <span class="stat-value status-idle" id="stat-status">준비</span>
+                </div>
+            </div>
+        </div>
+
+        <!-- Code editor + API reference -->
+        <div id="editor-panel">
+            <div class="panel-header">
+                <span>알고리즘 편집기</span>
+                <button id="btn-default" class="btn-small">기본값 복원</button>
+            </div>
+            <div id="editor-container">
+                <textarea id="code-editor"></textarea>
+            </div>
+            <div id="api-ref">
+                <div class="api-title">API 레퍼런스</div>
+                <div class="api-grid">
+                    <div class="api-row"><code>robot.sensors.front/back/left/right</code><span class="desc">벽 여부 (true=벽)</span></div>
+                    <div class="api-row"><code>await robot.moveForward()</code><span class="desc">한 칸 전진</span></div>
+                    <div class="api-row"><code>robot.sensors.frontLeft/Right, backLeft/Right</code><span class="desc">대각선 센서</span></div>
+                    <div class="api-row"><code>await robot.turnLeft()</code><span class="desc">좌회전 90°</span></div>
+                    <div class="api-row"><code>robot.sensors.gyro</code><span class="desc">각속도 °/초 (자이로)</span></div>
+                    <div class="api-row"><code>await robot.turnRight()</code><span class="desc">우회전 90°</span></div>
+                    <div class="api-row"><code>robot.atGoal</code><span class="desc">목표 도달 여부</span></div>
+                    <div class="api-row"><code>robot.odometer</code><span class="desc">총 이동 칸 수</span></div>
+                </div>
+            </div>
+        </div>
+
+    </div><!-- #main -->
+</div><!-- #app -->
+
+<script src="js/maze.js"></script>
+<script src="js/robot.js"></script>
+<script src="js/renderer.js"></script>
+<script src="js/simulator.js"></script>
+</body>
+</html>
