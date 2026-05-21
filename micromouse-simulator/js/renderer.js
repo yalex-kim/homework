@@ -1,11 +1,13 @@
 class Renderer {
-    constructor(canvas, maze, robot) {
-        this.canvas = canvas;
-        this.ctx = canvas.getContext('2d');
-        this.maze = maze;
-        this.robot = robot;
-        this.cellSize = 30;
-        this.padding = 15;
+    constructor(canvas, maze, robot, floodFill = null) {
+        this.canvas    = canvas;
+        this.ctx       = canvas.getContext('2d');
+        this.maze      = maze;
+        this.robot     = robot;
+        this.floodFill = floodFill;
+        this.showFF    = false;
+        this.cellSize  = 30;
+        this.padding   = 15;
         this._resize();
     }
 
@@ -14,7 +16,6 @@ class Renderer {
         this.canvas.height = this.maze.height * this.cellSize + this.padding * 2;
     }
 
-    // Cell-center → canvas pixel
     _cp(cx, cy) {
         return {
             px: this.padding + cx * this.cellSize + this.cellSize / 2,
@@ -23,13 +24,13 @@ class Renderer {
     }
 
     render() {
-        const { ctx, canvas, maze, robot, cellSize, padding } = this;
-
+        const { ctx, canvas } = this;
         ctx.fillStyle = '#0d0d1a';
         ctx.fillRect(0, 0, canvas.width, canvas.height);
 
         this._drawExplored();
         this._drawGoal();
+        if (this.showFF && this.floodFill) this._drawFloodFill();
         this._drawPath();
         this._drawWalls();
         this._drawSensors();
@@ -38,66 +39,132 @@ class Renderer {
 
     _drawExplored() {
         const { ctx, maze, cellSize, padding } = this;
-        for (let y = 0; y < maze.height; y++) {
-            for (let x = 0; x < maze.width; x++) {
+        for (let y = 0; y < maze.height; y++)
+            for (let x = 0; x < maze.width; x++)
                 if (maze.explored[y][x]) {
-                    ctx.fillStyle = 'rgba(137, 180, 250, 0.12)';
-                    ctx.fillRect(
-                        padding + x * cellSize + 1,
-                        padding + y * cellSize + 1,
-                        cellSize - 2, cellSize - 2
-                    );
+                    ctx.fillStyle = 'rgba(137,180,250,0.10)';
+                    ctx.fillRect(padding+x*cellSize+1, padding+y*cellSize+1, cellSize-2, cellSize-2);
                 }
-            }
-        }
     }
 
     _drawGoal() {
         const { ctx, cellSize, padding } = this;
-        for (let gy = 7; gy <= 8; gy++) {
+        for (let gy = 7; gy <= 8; gy++)
             for (let gx = 7; gx <= 8; gx++) {
-                ctx.fillStyle = 'rgba(166, 227, 161, 0.25)';
-                ctx.fillRect(
-                    padding + gx * cellSize + 1,
-                    padding + gy * cellSize + 1,
-                    cellSize - 2, cellSize - 2
-                );
+                ctx.fillStyle = 'rgba(166,227,161,0.22)';
+                ctx.fillRect(padding+gx*cellSize+1, padding+gy*cellSize+1, cellSize-2, cellSize-2);
             }
-        }
-        // Goal label
         const { px, py } = this._cp(7.5, 7.5);
-        ctx.fillStyle = 'rgba(166, 227, 161, 0.6)';
-        ctx.font = 'bold 10px sans-serif';
+        ctx.fillStyle = 'rgba(166,227,161,0.55)';
+        ctx.font = 'bold 9px sans-serif';
         ctx.textAlign = 'center';
         ctx.textBaseline = 'middle';
         ctx.fillText('GOAL', px, py);
     }
 
+    _drawFloodFill() {
+        const { ctx, maze, cellSize, padding, floodFill } = this;
+        const dist = floodFill.getDistMap();
+
+        let maxDist = 0;
+        for (let y = 0; y < maze.height; y++)
+            for (let x = 0; x < maze.width; x++)
+                if (dist[y][x] !== Infinity) maxDist = Math.max(maxDist, dist[y][x]);
+        if (maxDist === 0) return;
+
+        for (let y = 0; y < maze.height; y++) {
+            for (let x = 0; x < maze.width; x++) {
+                const d = dist[y][x];
+                if (d === Infinity) continue;
+
+                // Color: blue (far) → green (close)
+                const r = 1 - d / maxDist;
+                const red   = Math.round(137 * (1-r) + 10 * r);
+                const green = Math.round(100 * (1-r) + 200 * r);
+                const blue  = Math.round(250 * (1-r) + 80  * r);
+
+                ctx.fillStyle = `rgba(${red},${green},${blue},0.22)`;
+                ctx.fillRect(padding+x*cellSize+1, padding+y*cellSize+1, cellSize-2, cellSize-2);
+
+                // Distance number
+                const { px, py } = this._cp(x, y);
+                ctx.fillStyle = `rgba(${red},${green},${blue},0.9)`;
+                ctx.font = `${Math.max(7, Math.floor(cellSize * 0.3))}px monospace`;
+                ctx.textAlign = 'center';
+                ctx.textBaseline = 'middle';
+                ctx.fillText(d, px, py);
+            }
+        }
+    }
+
     _drawPath() {
         const { ctx, robot, cellSize, padding } = this;
-        if (robot.path.length < 2) return;
+        const pts = robot.path;
+        if (pts.length < 1) return;
 
-        const totalLen = robot.path.length;
-        for (let i = 1; i < totalLen; i++) {
-            const a = robot.path[i - 1];
-            const b = robot.path[i];
-            const alpha = 0.2 + 0.6 * (i / totalLen);
-            ctx.beginPath();
-            ctx.moveTo(padding + a.x * cellSize + cellSize / 2, padding + a.y * cellSize + cellSize / 2);
-            ctx.lineTo(padding + b.x * cellSize + cellSize / 2, padding + b.y * cellSize + cellSize / 2);
-            ctx.strokeStyle = `rgba(249, 226, 175, ${alpha})`;
-            ctx.lineWidth = 2;
-            ctx.stroke();
+        const px = (cx) => padding + cx * cellSize + cellSize / 2;
+        const py = (cy) => padding + cy * cellSize + cellSize / 2;
+
+        ctx.lineWidth = 2;
+
+        // Historical path segments
+        if (pts.length >= 2) {
+            for (let i = 1; i < pts.length; i++) {
+                const alpha = 0.15 + 0.65 * (i / pts.length);
+                ctx.beginPath();
+                ctx.moveTo(px(pts[i-1].x), py(pts[i-1].y));
+                ctx.lineTo(px(pts[i].x),   py(pts[i].y));
+                ctx.strokeStyle = `rgba(249,226,175,${alpha})`;
+                ctx.stroke();
+            }
         }
 
-        // Line to current visual position
-        const last = robot.path[robot.path.length - 1];
-        ctx.beginPath();
-        ctx.moveTo(padding + last.x * cellSize + cellSize / 2, padding + last.y * cellSize + cellSize / 2);
-        ctx.lineTo(padding + robot.visX * cellSize + cellSize / 2, padding + robot.visY * cellSize + cellSize / 2);
-        ctx.strokeStyle = 'rgba(249, 226, 175, 0.8)';
-        ctx.lineWidth = 2;
-        ctx.stroke();
+        // Current animation segment
+        const anim = robot._anim;
+        if (anim) {
+            const last = pts[pts.length - 1];
+            if (anim.type === 'bezier' && anim.cp) {
+                // Draw the full bezier preview (dashed), then the traveled portion (solid)
+                const cp = anim.cp;
+                const tp = (gx, gy) => [px(gx), py(gy)];
+                const [x0,y0] = tp(cp[0][0], cp[0][1]);
+                const [x1,y1] = tp(cp[1][0], cp[1][1]);
+                const [x2,y2] = tp(cp[2][0], cp[2][1]);
+                const [x3,y3] = tp(cp[3][0], cp[3][1]);
+
+                // Faint preview of full arc
+                ctx.beginPath();
+                ctx.moveTo(x0, y0);
+                ctx.bezierCurveTo(x1, y1, x2, y2, x3, y3);
+                ctx.strokeStyle = 'rgba(249,226,175,0.18)';
+                ctx.setLineDash([3, 4]);
+                ctx.lineWidth = 1.5;
+                ctx.stroke();
+                ctx.setLineDash([]);
+
+                // Solid arc traveled so far (to visual position)
+                ctx.beginPath();
+                ctx.moveTo(x0, y0);
+                ctx.bezierCurveTo(x1, y1, x2, y2,
+                    padding + robot.visX * cellSize + cellSize/2,
+                    padding + robot.visY * cellSize + cellSize/2);
+                ctx.strokeStyle = 'rgba(249,226,175,0.85)';
+                ctx.lineWidth = 2;
+                ctx.stroke();
+
+            } else {
+                // Straight or pivot: line to current visual position
+                ctx.beginPath();
+                ctx.moveTo(px(last.x), py(last.y));
+                ctx.lineTo(
+                    padding + robot.visX * cellSize + cellSize/2,
+                    padding + robot.visY * cellSize + cellSize/2
+                );
+                ctx.strokeStyle = 'rgba(249,226,175,0.85)';
+                ctx.lineWidth = 2;
+                ctx.stroke();
+            }
+        }
     }
 
     _drawWalls() {
@@ -113,10 +180,10 @@ class Renderer {
                 const w  = maze.walls[y][x];
 
                 ctx.beginPath();
-                if (w.n) { ctx.moveTo(px, py);              ctx.lineTo(px + cellSize, py); }
-                if (w.e) { ctx.moveTo(px + cellSize, py);   ctx.lineTo(px + cellSize, py + cellSize); }
-                if (w.s) { ctx.moveTo(px, py + cellSize);   ctx.lineTo(px + cellSize, py + cellSize); }
-                if (w.w) { ctx.moveTo(px, py);              ctx.lineTo(px, py + cellSize); }
+                if (w.n) { ctx.moveTo(px, py);            ctx.lineTo(px+cellSize, py); }
+                if (w.e) { ctx.moveTo(px+cellSize, py);   ctx.lineTo(px+cellSize, py+cellSize); }
+                if (w.s) { ctx.moveTo(px, py+cellSize);   ctx.lineTo(px+cellSize, py+cellSize); }
+                if (w.w) { ctx.moveTo(px, py);            ctx.lineTo(px, py+cellSize); }
                 ctx.stroke();
             }
         }
@@ -124,47 +191,40 @@ class Renderer {
 
     _drawSensors() {
         const { ctx, robot, cellSize, padding } = this;
-        const rpx = padding + robot.visX * cellSize + cellSize / 2;
-        const rpy = padding + robot.visY * cellSize + cellSize / 2;
-        const beam = cellSize * 0.85;
-
+        const rpx = padding + robot.visX * cellSize + cellSize/2;
+        const rpy = padding + robot.visY * cellSize + cellSize/2;
+        const beam = cellSize * 0.82;
         const s = robot.sensors;
+
         const BEAMS = [
-            { relDeg: 0,   key: 'front',      color: '#f38ba8' },
-            { relDeg: 90,  key: 'right',       color: '#89b4fa' },
-            { relDeg: 180, key: 'back',        color: '#a6e3a1' },
-            { relDeg: 270, key: 'left',        color: '#f9e2af' },
-            { relDeg: 45,  key: 'frontRight',  color: '#cba6f7', isDiag: true },
-            { relDeg: 135, key: 'backRight',   color: '#89dceb', isDiag: true },
-            { relDeg: 225, key: 'backLeft',    color: '#b4befe', isDiag: true },
-            { relDeg: 315, key: 'frontLeft',   color: '#fab387', isDiag: true },
+            {relDeg:   0, key:'front',      color:'#f38ba8'},
+            {relDeg:  90, key:'right',       color:'#89b4fa'},
+            {relDeg: 180, key:'back',        color:'#a6e3a1'},
+            {relDeg: 270, key:'left',        color:'#f9e2af'},
+            {relDeg:  45, key:'frontRight',  color:'#cba6f7', diag:true},
+            {relDeg: 135, key:'backRight',   color:'#89dceb', diag:true},
+            {relDeg: 225, key:'backLeft',    color:'#b4befe', diag:true},
+            {relDeg: 315, key:'frontLeft',   color:'#fab387', diag:true},
         ];
 
-        for (const { relDeg, key, color, isDiag } of BEAMS) {
-            const worldDeg = robot.visAngle + relDeg;
-            const rad = (worldDeg - 90) * Math.PI / 180;
+        for (const { relDeg, key, color, diag } of BEAMS) {
+            const rad     = (robot.visAngle + relDeg - 90) * Math.PI / 180;
             const hasWall = s[key];
-            const len = hasWall ? beam * 0.35 : beam;
-            const alpha = hasWall ? 0.9 : (isDiag ? 0.2 : 0.3);
+            const len     = hasWall ? beam * 0.35 : beam;
+            const alpha   = hasWall ? 0.9 : (diag ? 0.2 : 0.3);
 
+            const rgb = this._hexRgb(color);
             ctx.beginPath();
             ctx.moveTo(rpx, rpy);
-            ctx.lineTo(rpx + Math.cos(rad) * len, rpy + Math.sin(rad) * len);
-
-            const rgb = this._hexToRgb(color);
-            ctx.strokeStyle = `rgba(${rgb}, ${alpha})`;
+            ctx.lineTo(rpx + Math.cos(rad)*len, rpy + Math.sin(rad)*len);
+            ctx.strokeStyle = `rgba(${rgb},${alpha})`;
             ctx.lineWidth = hasWall ? 2 : 1;
             ctx.stroke();
 
-            // Dot at tip when wall detected
             if (hasWall) {
                 ctx.beginPath();
-                ctx.arc(
-                    rpx + Math.cos(rad) * len,
-                    rpy + Math.sin(rad) * len,
-                    2, 0, Math.PI * 2
-                );
-                ctx.fillStyle = `rgba(${rgb}, 0.9)`;
+                ctx.arc(rpx+Math.cos(rad)*len, rpy+Math.sin(rad)*len, 2, 0, Math.PI*2);
+                ctx.fillStyle = `rgba(${rgb},0.9)`;
                 ctx.fill();
             }
         }
@@ -172,28 +232,26 @@ class Renderer {
 
     _drawRobot() {
         const { ctx, robot, cellSize, padding } = this;
-        const rpx = padding + robot.visX * cellSize + cellSize / 2;
-        const rpy = padding + robot.visY * cellSize + cellSize / 2;
-        const r = cellSize * 0.32;
+        const rpx = padding + robot.visX * cellSize + cellSize/2;
+        const rpy = padding + robot.visY * cellSize + cellSize/2;
+        const r   = cellSize * 0.32;
 
         ctx.save();
         ctx.translate(rpx, rpy);
         ctx.rotate((robot.visAngle - 90) * Math.PI / 180);
 
-        // Body
         ctx.beginPath();
-        ctx.arc(0, 0, r, 0, Math.PI * 2);
+        ctx.arc(0, 0, r, 0, Math.PI*2);
         ctx.fillStyle = '#f38ba8';
         ctx.fill();
         ctx.strokeStyle = '#cdd6f4';
         ctx.lineWidth = 1.5;
         ctx.stroke();
 
-        // Direction arrow
         ctx.beginPath();
-        ctx.moveTo(0, -r * 0.85);
-        ctx.lineTo(-r * 0.38, r * 0.45);
-        ctx.lineTo(r * 0.38, r * 0.45);
+        ctx.moveTo(0, -r*0.85);
+        ctx.lineTo(-r*0.38, r*0.45);
+        ctx.lineTo( r*0.38, r*0.45);
         ctx.closePath();
         ctx.fillStyle = '#1e1e2e';
         ctx.fill();
@@ -201,17 +259,12 @@ class Renderer {
         ctx.restore();
     }
 
-    _hexToRgb(hex) {
+    _hexRgb(hex) {
         const n = parseInt(hex.slice(1), 16);
-        return `${(n >> 16) & 255}, ${(n >> 8) & 255}, ${n & 255}`;
+        return `${(n>>16)&255},${(n>>8)&255},${n&255}`;
     }
 
-    updateMaze(maze) {
-        this.maze = maze;
-        this._resize();
-    }
-
-    updateRobot(robot) {
-        this.robot = robot;
-    }
+    updateMaze(maze)           { this.maze      = maze;      this._resize(); }
+    updateRobot(robot)         { this.robot     = robot; }
+    updateFloodFill(floodFill) { this.floodFill = floodFill; }
 }

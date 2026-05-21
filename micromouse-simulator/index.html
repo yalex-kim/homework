@@ -5,7 +5,6 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>마이크로마우스 시뮬레이터</title>
     <link rel="stylesheet" href="css/style.css">
-    <!-- CodeMirror via CDN -->
     <link  rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/codemirror.min.css">
     <link  rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/theme/dracula.min.css">
     <script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/codemirror.min.js"></script>
@@ -14,7 +13,7 @@
 <body>
 <div id="app">
 
-    <!-- ── Toolbar ──────────────────────────────────────────────────────── -->
+    <!-- ── Toolbar ──────────────────────────────────────────────────────────── -->
     <header id="toolbar">
         <h1>🐭 마이크로마우스 시뮬레이터</h1>
         <div class="controls">
@@ -22,45 +21,81 @@
             <button id="btn-stop"     class="btn-secondary">⏹ 정지</button>
             <button id="btn-reset"    class="btn-secondary">↺ 리셋</button>
             <button id="btn-new-maze" class="btn-secondary">🔀 새 미로</button>
+            <button id="btn-ff-overlay" class="btn-secondary">FF 오버레이</button>
             <div class="speed-control">
-                <label for="speed-slider">속도</label>
+                <label for="speed-slider">시뮬 속도</label>
                 <input type="range" id="speed-slider" min="1" max="10" value="5">
                 <span id="speed-val">5</span>
             </div>
         </div>
     </header>
 
-    <!-- ── Main content ─────────────────────────────────────────────────── -->
+    <!-- ── Main ─────────────────────────────────────────────────────────────── -->
     <div id="main">
 
-        <!-- Canvas + status -->
+        <!-- Left: maze canvas + status + hardware -->
         <div id="canvas-panel">
             <canvas id="maze-canvas"></canvas>
+
             <div id="status-bar">
                 <div class="stat">
                     <span class="stat-label">위치</span>
-                    <span class="stat-value" id="stat-pos">(0, 15)</span>
+                    <span class="stat-value" id="stat-pos">(0,15)</span>
                 </div>
                 <div class="stat">
                     <span class="stat-label">방향</span>
-                    <span class="stat-value" id="stat-dir">북 ↑</span>
+                    <span class="stat-value" id="stat-dir">북↑</span>
                 </div>
                 <div class="stat">
-                    <span class="stat-label">이동거리</span>
-                    <span class="stat-value" id="stat-odo">0 칸</span>
+                    <span class="stat-label">이동</span>
+                    <span class="stat-value" id="stat-odo">0칸</span>
                 </div>
                 <div class="stat">
                     <span class="stat-label">자이로</span>
                     <span class="stat-value" id="stat-gyro">0.0°/s</span>
                 </div>
                 <div class="stat">
+                    <span class="stat-label">시간</span>
+                    <span class="stat-value" id="stat-time">0.00s</span>
+                </div>
+                <div class="stat">
                     <span class="stat-label">상태</span>
                     <span class="stat-value status-idle" id="stat-status">준비</span>
                 </div>
             </div>
+
+            <!-- Hardware profile config -->
+            <div id="hw-panel">
+                <div class="hw-header">하드웨어 프로파일</div>
+                <div class="hw-grid">
+                    <div class="hw-row">
+                        <label>최대속도 <em id="hw-max-speed-val">1.0</em> m/s</label>
+                        <input type="range" id="hw-max-speed" min="0.1" max="3.0" step="0.1" value="1.0">
+                    </div>
+                    <div class="hw-row">
+                        <label>가속도 <em id="hw-accel-val">3.0</em> m/s²</label>
+                        <input type="range" id="hw-accel" min="0.5" max="15" step="0.5" value="3.0">
+                    </div>
+                    <div class="hw-row">
+                        <label>감속도 <em id="hw-decel-val">3.0</em> m/s²</label>
+                        <input type="range" id="hw-decel" min="0.5" max="15" step="0.5" value="3.0">
+                    </div>
+                    <div class="hw-row">
+                        <label>턴 방식</label>
+                        <select id="hw-turn-type">
+                            <option value="pivot">Pivot — 제자리 회전</option>
+                            <option value="smooth">Smooth — 원호 턴</option>
+                        </select>
+                    </div>
+                    <div class="hw-row">
+                        <label>Smooth 반경 <em id="hw-smooth-radius-val">0.045</em> m</label>
+                        <input type="range" id="hw-smooth-radius" min="0.01" max="0.08" step="0.005" value="0.045">
+                    </div>
+                </div>
+            </div>
         </div>
 
-        <!-- Code editor + API reference -->
+        <!-- Right: code editor + API ref -->
         <div id="editor-panel">
             <div class="panel-header">
                 <span>알고리즘 편집기</span>
@@ -72,12 +107,16 @@
             <div id="api-ref">
                 <div class="api-title">API 레퍼런스</div>
                 <div class="api-grid">
-                    <div class="api-row"><code>robot.sensors.front/back/left/right</code><span class="desc">벽 여부 (true=벽)</span></div>
+                    <div class="api-row"><code>ff.sense(robot)</code><span class="desc">벽 감지 후 FF 재계산</span></div>
+                    <div class="api-row"><code>await robot.moveTo('n'|'e'|'s'|'w')</code><span class="desc">절대 방향 이동</span></div>
+                    <div class="api-row"><code>ff.bestDir(x, y, facing)</code><span class="desc">최적 방향 반환</span></div>
                     <div class="api-row"><code>await robot.moveForward()</code><span class="desc">한 칸 전진</span></div>
-                    <div class="api-row"><code>robot.sensors.frontLeft/Right, backLeft/Right</code><span class="desc">대각선 센서</span></div>
-                    <div class="api-row"><code>await robot.turnLeft()</code><span class="desc">좌회전 90°</span></div>
-                    <div class="api-row"><code>robot.sensors.gyro</code><span class="desc">각속도 °/초 (자이로)</span></div>
-                    <div class="api-row"><code>await robot.turnRight()</code><span class="desc">우회전 90°</span></div>
+                    <div class="api-row"><code>ff.getDistMap()[y][x]</code><span class="desc">역방향 추산 비용</span></div>
+                    <div class="api-row"><code>await robot.smoothTurnRight/Left()</code><span class="desc">원호 턴+전진</span></div>
+                    <div class="api-row"><code>robot.sensors.front/back/left/right</code><span class="desc">벽 여부 (true=벽)</span></div>
+                    <div class="api-row"><code>await robot.turnLeft/Right()</code><span class="desc">pivot 회전 90°</span></div>
+                    <div class="api-row"><code>robot.sensors.gyro</code><span class="desc">각속도 °/s (자이로)</span></div>
+                    <div class="api-row"><code>robot.elapsedTime</code><span class="desc">물리 경과 시간 (초)</span></div>
                     <div class="api-row"><code>robot.atGoal</code><span class="desc">목표 도달 여부</span></div>
                     <div class="api-row"><code>robot.odometer</code><span class="desc">총 이동 칸 수</span></div>
                 </div>
@@ -87,7 +126,10 @@
     </div><!-- #main -->
 </div><!-- #app -->
 
+<!-- Load order matters: maze → hardware → floodfill → robot → renderer → simulator -->
 <script src="js/maze.js"></script>
+<script src="js/hardware.js"></script>
+<script src="js/floodfill.js"></script>
 <script src="js/robot.js"></script>
 <script src="js/renderer.js"></script>
 <script src="js/simulator.js"></script>

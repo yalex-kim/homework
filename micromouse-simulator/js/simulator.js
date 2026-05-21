@@ -1,39 +1,34 @@
-// ── Default algorithm (Right-hand rule) ──────────────────────────────────────
+// ── Default algorithm (Flood Fill) ───────────────────────────────────────────
 const DEFAULT_ALGORITHM =
-`// ===== 오른쪽 벽 추종 알고리즘 (Right-hand Rule) =====
+`// ===== 플러드 필 탐색 알고리즘 =====
 //
-// API:
-//   robot.sensors.front / back / left / right   → 벽 여부 (true = 벽)
-//   robot.sensors.frontLeft/Right, backLeft/Right → 대각선 센서
-//   robot.sensors.gyro                           → 각속도 (°/초, 자이로 센서)
-//   robot.atGoal                                 → 목표 도달 여부
-//   robot.odometer                               → 총 이동 칸 수
+// 제공 객체:
+//   robot  — 로봇 제어
+//   ff     — FloodFill 인스턴스 (역방향 시간 추산)
 //
-//   await robot.moveForward()   → 한 칸 전진
-//   await robot.turnLeft()      → 좌회전 90°
-//   await robot.turnRight()     → 우회전 90°
+// 주요 API:
+//   ff.sense(robot)                  → 센서 읽어 벽 지식 업데이트 + 재계산
+//   ff.bestDir(x, y, facing)         → turn penalty 반영 최적 방향 반환
+//   ff.getDistMap()[y][x]            → 각 셀의 목표까지 추산 비용
+//   await robot.moveTo('n'|'e'|'s'|'w')  → 절대 방향으로 이동 (smooth/pivot 자동)
+//   robot.sensors.gyro               → 자이로 각속도 (°/s)
+//   robot.elapsedTime                → 누적 물리 시간 (초)
 
-let maxSteps = 5000;  // 무한루프 방지
+function facing() {
+    return ['n','e','s','w'][((Math.round(robot.angle / 90)) % 4 + 4) % 4];
+}
 
-while (!robot.atGoal && maxSteps-- > 0) {
-    const s = robot.sensors;
+let steps = 0;
+while (!robot.atGoal && steps++ < 3000) {
+    // 벽 감지 → 플러드 필 업데이트 (변화 있을 때만 재계산)
+    ff.sense(robot);
 
-    if (!s.right) {
-        // 오른쪽이 열려있으면: 우회전 후 전진
-        await robot.turnRight();
-        await robot.moveForward();
-    } else if (!s.front) {
-        // 앞이 열려있으면: 직진
-        await robot.moveForward();
-    } else if (!s.left) {
-        // 왼쪽이 열려있으면: 좌회전 후 전진
-        await robot.turnLeft();
-        await robot.moveForward();
-    } else {
-        // 막힌 경우: U턴
-        await robot.turnRight();
-        await robot.turnRight();
-    }
+    // turn penalty를 반영한 최적 이동 방향 계산
+    const dir = ff.bestDir(robot.x, robot.y, facing());
+    if (!dir) { console.log('경로 없음!'); break; }
+
+    // smooth turn(원호) 또는 pivot turn 자동 선택하여 이동
+    await robot.moveTo(dir);
 }`;
 
 // ── Simulator controller ──────────────────────────────────────────────────────
@@ -41,8 +36,10 @@ const AsyncFunction = Object.getPrototypeOf(async function () {}).constructor;
 
 class Simulator {
     constructor() {
-        this.maze   = new Maze();
-        this.robot  = new Robot(this.maze);
+        this.maze     = new Maze();
+        this.hardware = new HardwareProfile();
+        this.robot    = new Robot(this.maze, this.hardware);
+        this.ff       = new FloodFill(this.maze, this.hardware);
         this.renderer = null;
         this._editor  = null;
         this._running = false;
@@ -51,33 +48,39 @@ class Simulator {
 
     init() {
         const canvas = document.getElementById('maze-canvas');
-        this.renderer = new Renderer(canvas, this.maze, this.robot);
+        this.renderer = new Renderer(canvas, this.maze, this.robot, this.ff);
 
+        // CodeMirror editor
         this._editor = CodeMirror.fromTextArea(
             document.getElementById('code-editor'),
-            {
-                mode: 'javascript',
-                theme: 'dracula',
-                lineNumbers: true,
-                tabSize: 2,
-                indentWithTabs: false,
-                lineWrapping: false,
-                autofocus: true,
-            }
+            { mode:'javascript', theme:'dracula', lineNumbers:true,
+              tabSize:2, indentWithTabs:false, lineWrapping:false, autofocus:true }
         );
         this._editor.setValue(DEFAULT_ALGORITHM);
 
+        // Toolbar buttons
         document.getElementById('btn-start').onclick    = () => this.start();
         document.getElementById('btn-stop').onclick     = () => this.stop();
         document.getElementById('btn-reset').onclick    = () => this.reset();
         document.getElementById('btn-new-maze').onclick = () => this.newMaze();
         document.getElementById('btn-default').onclick  = () => this._editor.setValue(DEFAULT_ALGORITHM);
 
+        // Simulation speed
         const slider = document.getElementById('speed-slider');
         slider.oninput = (e) => {
-            this.robot.speed = parseInt(e.target.value, 10);
-            document.getElementById('speed-val').textContent = e.target.value;
+            const v = parseInt(e.target.value, 10);
+            this.robot.speed = v;
+            document.getElementById('speed-val').textContent = v;
         };
+
+        // Flood fill overlay toggle
+        document.getElementById('btn-ff-overlay').onclick = (e) => {
+            this.renderer.showFF = !this.renderer.showFF;
+            e.currentTarget.classList.toggle('active', this.renderer.showFF);
+        };
+
+        // Hardware sliders
+        this._bindHardwareUI();
 
         // Render loop
         const loop = (t) => {
@@ -97,13 +100,12 @@ class Simulator {
         this.robot.resume();
         this._setStatus('실행 중...', 'running');
 
-        const code = this._editor.getValue();
         try {
-            const fn = new AsyncFunction('robot', code);
-            await fn(this.robot);
+            const fn = new AsyncFunction('robot', 'ff', this._editor.getValue());
+            await fn(this.robot, this.ff);
 
             if (this.robot.atGoal) {
-                this._setStatus(`목표 도달! (${this.robot.odometer}칸)`, 'goal');
+                this._setStatus(`목표 도달! ${this.robot.odometer}칸 / ${this.robot.elapsedTime.toFixed(2)}s`, 'goal');
             } else if (this._running) {
                 this._setStatus('완료', 'idle');
             }
@@ -128,6 +130,8 @@ class Simulator {
         this.robot.stop();
         setTimeout(() => {
             this.robot.reset();
+            this.ff = new FloodFill(this.maze, this.hardware);
+            this.renderer.updateFloodFill(this.ff);
             this._setStatus('준비', 'idle');
         }, 80);
     }
@@ -136,12 +140,41 @@ class Simulator {
         this.robot.stop();
         setTimeout(() => {
             this.maze.generate();
-            this.robot = new Robot(this.maze);
+            this.robot  = new Robot(this.maze, this.hardware);
+            this.ff     = new FloodFill(this.maze, this.hardware);
             this.renderer.updateMaze(this.maze);
             this.renderer.updateRobot(this.robot);
+            this.renderer.updateFloodFill(this.ff);
             this._setStatus('준비', 'idle');
         }, 80);
     }
+
+    // ── Hardware UI ──────────────────────────────────────────────────────────
+
+    _bindHardwareUI() {
+        const hw = this.hardware;
+        const bind = (id, key) => {
+            const el  = document.getElementById(id);
+            const val = document.getElementById(id + '-val');
+            if (!el) return;
+            el.oninput = (e) => {
+                hw[key] = parseFloat(e.target.value);
+                if (val) val.textContent = parseFloat(e.target.value).toFixed(
+                    e.target.step && e.target.step < 1 ? 3 : 1
+                );
+            };
+        };
+
+        bind('hw-max-speed',     'maxSpeed');
+        bind('hw-accel',         'accel');
+        bind('hw-decel',         'decel');
+        bind('hw-smooth-radius', 'smoothRadius');
+
+        const turnSel = document.getElementById('hw-turn-type');
+        if (turnSel) turnSel.onchange = (e) => { hw.turnType = e.target.value; };
+    }
+
+    // ── Status bar ───────────────────────────────────────────────────────────
 
     _setStatus(text, type = 'idle') {
         const el = document.getElementById('stat-status');
@@ -151,18 +184,15 @@ class Simulator {
 
     _updateStatus() {
         const r = this.robot;
-        const DIRS = ['북 ↑', '동 →', '남 ↓', '서 ←'];
-        const dirIdx = ((Math.round(r.angle / 90) % 4) + 4) % 4;
+        const DIRS = ['북↑','동→','남↓','서←'];
+        const di   = ((Math.round(r.angle / 90)) % 4 + 4) % 4;
 
-        document.getElementById('stat-pos').textContent  = `(${r.x}, ${r.y})`;
-        document.getElementById('stat-dir').textContent  = DIRS[dirIdx];
-        document.getElementById('stat-odo').textContent  = `${r.odometer} 칸`;
-        document.getElementById('stat-gyro').textContent =
-            `${r._gyroVelocity.toFixed(1)}°/s`;
+        document.getElementById('stat-pos').textContent  = `(${r.x},${r.y})`;
+        document.getElementById('stat-dir').textContent  = DIRS[di];
+        document.getElementById('stat-odo').textContent  = `${r.odometer}칸`;
+        document.getElementById('stat-gyro').textContent = `${r._gyroVelocity.toFixed(1)}°/s`;
+        document.getElementById('stat-time').textContent = `${r.elapsedTime.toFixed(2)}s`;
     }
 }
 
-window.addEventListener('DOMContentLoaded', () => {
-    const sim = new Simulator();
-    sim.init();
-});
+window.addEventListener('DOMContentLoaded', () => { new Simulator().init(); });
