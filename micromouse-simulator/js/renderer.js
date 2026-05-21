@@ -64,7 +64,9 @@ class Renderer {
 
     _drawFloodFill() {
         const { ctx, maze, cellSize, padding, floodFill } = this;
-        const dist = floodFill.getDistMap();
+        const dist     = floodFill.getDistMap();
+        const known    = floodFill.knownWalls;   // which walls robot has observed
+        const explored = maze.explored;           // which cells robot has visited
 
         let maxDist = 0;
         for (let y = 0; y < maze.height; y++)
@@ -72,27 +74,60 @@ class Renderer {
                 if (dist[y][x] !== Infinity) maxDist = Math.max(maxDist, dist[y][x]);
         if (maxDist === 0) return;
 
+        const fs = Math.max(7, Math.floor(cellSize * 0.30));
+        ctx.font = `${fs}px monospace`;
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'middle';
+
         for (let y = 0; y < maze.height; y++) {
             for (let x = 0; x < maze.width; x++) {
-                const d = dist[y][x];
-                if (d === Infinity) continue;
+                const d    = dist[y][x];
+                const vis  = explored[y][x];  // robot has been here
+                const px   = padding + x * cellSize;
+                const py   = padding + y * cellSize;
+                const { px: cx, py: cy } = this._cp(x, y);
 
-                // Color: blue (far) → green (close)
-                const r = 1 - d / maxDist;
-                const red   = Math.round(137 * (1-r) + 10 * r);
-                const green = Math.round(100 * (1-r) + 200 * r);
-                const blue  = Math.round(250 * (1-r) + 80  * r);
+                if (d === Infinity) {
+                    // Unreachable with current wall knowledge — dark red tint
+                    ctx.fillStyle = 'rgba(243,139,168,0.12)';
+                    ctx.fillRect(px+1, py+1, cellSize-2, cellSize-2);
+                    continue;
+                }
 
-                ctx.fillStyle = `rgba(${red},${green},${blue},0.22)`;
-                ctx.fillRect(padding+x*cellSize+1, padding+y*cellSize+1, cellSize-2, cellSize-2);
+                // Color: blue (far) → green (close to goal)
+                const ratio = 1 - d / maxDist;
+                const red   = Math.round(137 * (1-ratio) + 10  * ratio);
+                const green = Math.round(100 * (1-ratio) + 200 * ratio);
+                const blue  = Math.round(250 * (1-ratio) + 80  * ratio);
 
-                // Distance number
-                const { px, py } = this._cp(x, y);
-                ctx.fillStyle = `rgba(${red},${green},${blue},0.9)`;
-                ctx.font = `${Math.max(7, Math.floor(cellSize * 0.3))}px monospace`;
-                ctx.textAlign = 'center';
-                ctx.textBaseline = 'middle';
-                ctx.fillText(d, px, py);
+                // Unexplored cells are dimmer
+                const bgAlpha  = vis ? 0.28 : 0.10;
+                const txtAlpha = vis ? 0.95 : 0.40;
+
+                ctx.fillStyle = `rgba(${red},${green},${blue},${bgAlpha})`;
+                ctx.fillRect(px+1, py+1, cellSize-2, cellSize-2);
+
+                ctx.fillStyle = `rgba(${red},${green},${blue},${txtAlpha})`;
+                ctx.fillText(d, cx, cy);
+            }
+        }
+
+        // Draw "known walls" overlay (walls the robot has confirmed)
+        // as slightly thicker/brighter segments on top of the wall layer
+        ctx.strokeStyle = 'rgba(250,179,135,0.55)';
+        ctx.lineWidth = 3;
+        ctx.lineCap = 'butt';
+        for (let y = 0; y < maze.height; y++) {
+            for (let x = 0; x < maze.width; x++) {
+                const k  = known[y][x];
+                const px = padding + x * cellSize;
+                const py = padding + y * cellSize;
+                ctx.beginPath();
+                if (k.n) { ctx.moveTo(px+2, py);          ctx.lineTo(px+cellSize-2, py); }
+                if (k.e) { ctx.moveTo(px+cellSize, py+2);  ctx.lineTo(px+cellSize, py+cellSize-2); }
+                if (k.s) { ctx.moveTo(px+2, py+cellSize);  ctx.lineTo(px+cellSize-2, py+cellSize); }
+                if (k.w) { ctx.moveTo(px, py+2);           ctx.lineTo(px, py+cellSize-2); }
+                ctx.stroke();
             }
         }
     }

@@ -39,6 +39,7 @@ class Simulator {
         this.maze     = new Maze();
         this.hardware = new HardwareProfile();
         this.robot    = new Robot(this.maze, this.hardware);
+        this.robot.speed = 3;  // default: slow enough to see wall discovery
         this.ff       = new FloodFill(this.maze, this.hardware);
         this.renderer = null;
         this._editor  = null;
@@ -73,7 +74,9 @@ class Simulator {
             document.getElementById('speed-val').textContent = v;
         };
 
-        // Flood fill overlay toggle
+        // Flood fill overlay — enabled by default so wall discovery is visible
+        this.renderer.showFF = true;
+        document.getElementById('btn-ff-overlay').classList.add('active');
         document.getElementById('btn-ff-overlay').onclick = (e) => {
             this.renderer.showFF = !this.renderer.showFF;
             e.currentTarget.classList.toggle('active', this.renderer.showFF);
