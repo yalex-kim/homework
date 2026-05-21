@@ -65,8 +65,7 @@ class Renderer {
     _drawFloodFill() {
         const { ctx, maze, cellSize, padding, floodFill } = this;
         const dist     = floodFill.getDistMap();
-        const known    = floodFill.knownWalls;   // which walls robot has observed
-        const explored = maze.explored;           // which cells robot has visited
+        const explored = maze.explored;
 
         let maxDist = 0;
         for (let y = 0; y < maze.height; y++)
@@ -109,25 +108,6 @@ class Renderer {
 
                 ctx.fillStyle = `rgba(${red},${green},${blue},${txtAlpha})`;
                 ctx.fillText(d, cx, cy);
-            }
-        }
-
-        // Draw "known walls" overlay (walls the robot has confirmed)
-        // as slightly thicker/brighter segments on top of the wall layer
-        ctx.strokeStyle = 'rgba(250,179,135,0.55)';
-        ctx.lineWidth = 3;
-        ctx.lineCap = 'butt';
-        for (let y = 0; y < maze.height; y++) {
-            for (let x = 0; x < maze.width; x++) {
-                const k  = known[y][x];
-                const px = padding + x * cellSize;
-                const py = padding + y * cellSize;
-                ctx.beginPath();
-                if (k.n) { ctx.moveTo(px+2, py);          ctx.lineTo(px+cellSize-2, py); }
-                if (k.e) { ctx.moveTo(px+cellSize, py+2);  ctx.lineTo(px+cellSize, py+cellSize-2); }
-                if (k.s) { ctx.moveTo(px+2, py+cellSize);  ctx.lineTo(px+cellSize-2, py+cellSize); }
-                if (k.w) { ctx.moveTo(px, py+2);           ctx.lineTo(px, py+cellSize-2); }
-                ctx.stroke();
             }
         }
     }
@@ -203,25 +183,49 @@ class Renderer {
     }
 
     _drawWalls() {
-        const { ctx, maze, cellSize, padding } = this;
-        ctx.strokeStyle = '#cdd6f4';
-        ctx.lineWidth = 2;
+        const { ctx, maze, cellSize, padding, floodFill } = this;
         ctx.lineCap = 'square';
+
+        const SIDES = [
+            ['n', (px, py) => [px,          py,           px+cellSize, py          ]],
+            ['e', (px, py) => [px+cellSize,  py,           px+cellSize, py+cellSize ]],
+            ['s', (px, py) => [px,           py+cellSize,  px+cellSize, py+cellSize ]],
+            ['w', (px, py) => [px,           py,           px,          py+cellSize ]],
+        ];
 
         for (let y = 0; y < maze.height; y++) {
             for (let x = 0; x < maze.width; x++) {
-                const px = padding + x * cellSize;
-                const py = padding + y * cellSize;
                 const w  = maze.walls[y][x];
+                const k  = floodFill ? floodFill.knownWalls[y][x] : null;
+                const bx = padding + x * cellSize;
+                const by = padding + y * cellSize;
 
-                ctx.beginPath();
-                if (w.n) { ctx.moveTo(px, py);            ctx.lineTo(px+cellSize, py); }
-                if (w.e) { ctx.moveTo(px+cellSize, py);   ctx.lineTo(px+cellSize, py+cellSize); }
-                if (w.s) { ctx.moveTo(px, py+cellSize);   ctx.lineTo(px+cellSize, py+cellSize); }
-                if (w.w) { ctx.moveTo(px, py);            ctx.lineTo(px, py+cellSize); }
-                ctx.stroke();
+                for (const [dir, coords] of SIDES) {
+                    if (!w[dir]) continue;  // no wall here
+
+                    const known = !k || k[dir];  // known = confirmed by robot (or no FF)
+
+                    if (known) {
+                        // Confirmed wall — solid bright line
+                        ctx.strokeStyle = '#cdd6f4';
+                        ctx.lineWidth   = 2;
+                        ctx.setLineDash([]);
+                    } else {
+                        // Wall exists but robot hasn't discovered it yet — dashed dim
+                        ctx.strokeStyle = 'rgba(205,214,244,0.28)';
+                        ctx.lineWidth   = 1.5;
+                        ctx.setLineDash([3, 5]);
+                    }
+
+                    const [x1, y1, x2, y2] = coords(bx, by);
+                    ctx.beginPath();
+                    ctx.moveTo(x1, y1);
+                    ctx.lineTo(x2, y2);
+                    ctx.stroke();
+                }
             }
         }
+        ctx.setLineDash([]);
     }
 
     _drawSensors() {
