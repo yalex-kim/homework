@@ -161,11 +161,12 @@ class Robot {
         const tx = this.x + DX[fromDi];
         const ty = this.y + DY[fromDi];
 
-        // Wall checks: must be able to enter and exit turning cell
+        // Wall checks: forward must be clear (to enter turning cell),
+        // and lateral must be clear from current cell (matches flood fill's assumption).
         if (tx < 0 || tx >= this.maze.width  || ty < 0 || ty >= this.maze.height) return null;
         if (nx < 0 || nx >= this.maze.width  || ny < 0 || ny >= this.maze.height) return null;
-        if (this.maze.hasWall(this.x, this.y, DIRS[fromDi])) return null;
-        if (this.maze.hasWall(tx, ty, DIRS[toDi]))           return null;
+        if (this.maze.hasWall(this.x, this.y, DIRS[fromDi])) return null;  // forward
+        if (this.maze.hasWall(this.x, this.y, DIRS[toDi]))   return null;  // lateral
 
         const R = this.hw
             ? Math.min(this.hw.smoothRadius / this.hw.cellSize, 0.45)
