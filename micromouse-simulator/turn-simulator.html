@@ -4,664 +4,597 @@
 <meta charset="UTF-8">
 <title>턴 시뮬레이터 — 마이크로마우스</title>
 <style>
-:root {
-  --bg:#0d0d1a; --surface:#1e1e2e; --surface2:#2a2a3e;
-  --border:#383851; --text:#cdd6f4; --muted:#6c7086;
-  --accent:#89b4fa; --success:#a6e3a1; --warn:#f9e2af; --error:#f38ba8;
-}
+:root{--bg:#0d0d1a;--surface:#1e1e2e;--surface2:#2a2a3e;--border:#383851;--text:#cdd6f4;--muted:#6c7086;--accent:#89b4fa;--success:#a6e3a1;--warn:#f9e2af;--error:#f38ba8;}
 *,*::before,*::after{box-sizing:border-box;margin:0;padding:0;}
 html,body{height:100%;background:var(--bg);color:var(--text);font-family:'Segoe UI',system-ui,sans-serif;font-size:13px;overflow:hidden;}
 #app{display:flex;flex-direction:column;height:100vh;}
-
-/* toolbar */
 #toolbar{display:flex;align-items:center;gap:12px;padding:7px 14px;background:var(--surface);border-bottom:1px solid var(--border);flex-shrink:0;}
 #toolbar h1{font-size:13px;font-weight:700;color:var(--accent);white-space:nowrap;}
 #toolbar a{color:var(--muted);font-size:11px;text-decoration:none;border:1px solid var(--border);padding:3px 9px;border-radius:4px;}
 #toolbar a:hover{color:var(--text);}
-button{border:none;cursor:pointer;border-radius:5px;font-size:12px;padding:5px 11px;font-weight:500;transition:filter .12s,transform .1s;}
+button{border:none;cursor:pointer;border-radius:5px;font-size:12px;padding:5px 11px;font-weight:500;transition:filter .12s;}
 button:hover{filter:brightness(1.15);}
-button:active{transform:scale(.97);}
 .btn-primary{background:var(--accent);color:#1e1e2e;font-weight:700;}
 .btn-secondary{background:var(--surface2);color:var(--text);border:1px solid var(--border);}
 .ctrl-row{display:flex;align-items:center;gap:6px;}
 label.sl{font-size:11px;color:var(--muted);white-space:nowrap;}
-#anim-speed-slider{width:70px;accent-color:var(--accent);}
 
-/* main layout */
 #main{display:flex;flex:1;overflow:hidden;}
+#params{width:230px;flex-shrink:0;background:var(--surface);border-right:1px solid var(--border);overflow-y:auto;padding:10px;}
+.sec{font-size:10px;text-transform:uppercase;letter-spacing:.5px;color:var(--muted);font-weight:700;margin:10px 0 6px;}
+.pr{display:flex;align-items:center;justify-content:space-between;margin-bottom:5px;gap:4px;}
+.pr label{font-size:11px;color:var(--text);flex:1;}
+.pr input[type=range]{flex:1;accent-color:var(--accent);}
+.pr em{font-size:10px;color:var(--muted);min-width:38px;text-align:right;font-style:normal;}
+.pv{font-size:11px;color:var(--accent);font-family:monospace;min-width:40px;text-align:right;}
 
-/* param panel */
-#params{width:220px;flex-shrink:0;background:var(--surface);border-right:1px solid var(--border);overflow-y:auto;padding:10px;}
-.section-title{font-size:10px;text-transform:uppercase;letter-spacing:.5px;color:var(--muted);font-weight:700;margin:10px 0 6px;}
-.param-row{display:flex;align-items:center;justify-content:space-between;margin-bottom:5px;gap:6px;}
-.param-row label{font-size:11px;color:var(--text);flex:1;}
-.param-row input[type=number]{width:72px;background:var(--surface2);color:var(--text);border:1px solid var(--border);border-radius:4px;padding:3px 5px;font-size:11px;text-align:right;}
-.param-row input[type=number]:focus{outline:none;border-color:var(--accent);}
-.param-row em{font-size:10px;color:var(--muted);font-style:normal;min-width:26px;}
+#stats{background:var(--surface2);border:1px solid var(--border);border-radius:5px;padding:8px 10px;margin-top:8px;}
+.sr{display:flex;justify-content:space-between;align-items:center;font-size:11px;margin-bottom:4px;}
+.sk{color:var(--muted);}
+.sv{color:var(--accent);font-family:monospace;}
+.sv.ok{color:var(--success);}
+.sv.warn{color:var(--warn);}
+.sv.err{color:var(--error);}
 
-.radio-group{display:flex;flex-direction:column;gap:4px;margin-bottom:6px;}
-.radio-group label{display:flex;align-items:center;gap:5px;font-size:11px;cursor:pointer;}
-.radio-group input{accent-color:var(--accent);}
-
-.angle-buttons{display:flex;gap:4px;flex-wrap:wrap;margin-bottom:8px;}
-.angle-btn{padding:4px 8px;font-size:11px;background:var(--surface2);color:var(--text);border:1px solid var(--border);border-radius:4px;}
-.angle-btn.active{background:var(--accent);color:#1e1e2e;border-color:var(--accent);font-weight:700;}
-
-#stats-box{background:var(--surface2);border:1px solid var(--border);border-radius:5px;padding:7px 9px;margin-top:8px;}
-.stat-row{display:flex;justify-content:space-between;font-size:11px;margin-bottom:3px;}
-.stat-row .sk{color:var(--muted);}
-.stat-row .sv{color:var(--accent);font-family:monospace;}
-
-/* canvas area */
-#canvas-area{flex:1;display:flex;flex-direction:column;overflow:hidden;padding:10px;gap:8px;}
-#main-canvas{background:var(--bg);border:1px solid var(--border);border-radius:5px;flex-shrink:0;display:block;}
-#graphs{display:flex;gap:8px;flex-shrink:0;}
-#graphs canvas{background:var(--surface);border:1px solid var(--border);border-radius:5px;flex:1;}
+#canvas-area{flex:1;display:flex;align-items:center;justify-content:center;padding:12px;background:var(--bg);}
+canvas{background:var(--bg);border:1px solid var(--border);border-radius:6px;display:block;}
 </style>
 </head>
 <body>
 <div id="app">
 
 <header id="toolbar">
-  <h1>⚙️ 턴 시뮬레이터</h1>
+  <h1>📐 턴 시뮬레이터 (셀 블록)</h1>
   <a href="index.html">← 메인</a>
   <div class="ctrl-row">
     <button id="btn-play" class="btn-primary">▶ 재생</button>
     <button id="btn-reset" class="btn-secondary">↺ 리셋</button>
   </div>
   <div class="ctrl-row">
-    <label class="sl">재생속도</label>
-    <input type="range" id="anim-speed-slider" min="0.1" max="5" step="0.1" value="1">
-    <span id="anim-speed-val" style="font-size:11px;color:var(--text);min-width:24px;">1.0x</span>
+    <label class="sl">속도</label>
+    <input type="range" id="anim-speed" min="0.2" max="4" step="0.2" value="1" style="width:70px;accent-color:var(--accent);">
+    <span id="anim-speed-val" style="font-size:11px;min-width:24px;">1.0×</span>
+  </div>
+  <div class="ctrl-row">
+    <label class="sl">방향</label>
+    <button id="btn-dir" class="btn-secondary" style="min-width:60px;">우회전 →</button>
   </div>
 </header>
 
 <div id="main">
-  <div id="params">
+<div id="params">
 
-    <div class="section-title">로봇 물리 파라미터</div>
-    <div class="param-row"><label>Tread Width</label><input type="number" id="p-tread" value="86" min="10" max="200" step="1"><em>mm</em></div>
-    <div class="param-row"><label>바퀴 직경</label><input type="number" id="p-wheel-d" value="32" min="5" max="100" step="1"><em>mm</em></div>
-    <div class="param-row"><label>로봇 무게</label><input type="number" id="p-mass" value="0.085" min="0.01" max="1" step="0.005"><em>kg</em></div>
-    <div class="param-row"><label>로봇 길이</label><input type="number" id="p-length" value="90" min="20" max="200" step="1"><em>mm</em></div>
+  <div class="sec">미로 / 로봇</div>
+  <div class="pr"><label>셀 크기 C</label><input type="range" id="p-cell" min="100" max="250" step="5" value="180"><span class="pv" id="v-cell">180</span><em>mm</em></div>
+  <div class="pr"><label>턴 반경 R</label><input type="range" id="p-r" min="5" max="120" step="1" value="45"><span class="pv" id="v-r">45</span><em>mm</em></div>
+  <div class="pr"><label>Tread 폭 L</label><input type="range" id="p-tread" min="30" max="150" step="1" value="86"><span class="pv" id="v-tread">86</span><em>mm</em></div>
+  <div class="pr"><label>로봇 폭 W</label><input type="range" id="p-bw" min="20" max="150" step="1" value="80"><span class="pv" id="v-bw">80</span><em>mm</em></div>
+  <div class="pr"><label>로봇 길이 H</label><input type="range" id="p-bh" min="20" max="150" step="1" value="90"><span class="pv" id="v-bh">90</span><em>mm</em></div>
 
-    <div class="section-title">속도 파라미터</div>
-    <div class="param-row"><label>최대 속도</label><input type="number" id="p-vmax" value="1.0" min="0.1" max="5" step="0.1"><em>m/s</em></div>
-    <div class="param-row"><label>가속도</label><input type="number" id="p-accel" value="5.0" min="0.5" max="30" step="0.5"><em>m/s²</em></div>
-    <div class="param-row"><label>최대 횡가속</label><input type="number" id="p-alat" value="4.0" min="0.5" max="20" step="0.5"><em>m/s²</em></div>
-    <div class="param-row"><label>턴 반경 R</label><input type="number" id="p-radius" value="100" min="0" max="500" step="5"><em>mm</em></div>
+  <div class="sec">속도 / 물리</div>
+  <div class="pr"><label>최대 속도</label><input type="range" id="p-vmax" min="0.1" max="5" step="0.1" value="1.5"><span class="pv" id="v-vmax">1.5</span><em>m/s</em></div>
+  <div class="pr"><label>최대 횡G</label><input type="range" id="p-alat" min="0.5" max="20" step="0.5" value="4.0"><span class="pv" id="v-alat">4.0</span><em>m/s²</em></div>
+  <div class="pr"><label>최소 직선 d<sub>min</sub></label><input type="range" id="p-dmin" min="0" max="80" step="5" value="20"><span class="pv" id="v-dmin">20</span><em>mm</em></div>
 
-    <div class="section-title">턴 타입</div>
-    <div class="radio-group">
-      <label><input type="radio" name="turn-type" value="arc" checked> Arc (원호)</label>
-      <label><input type="radio" name="turn-type" value="pivot"> Pivot (제자리)</label>
+  <div id="stats">
+    <div class="sr"><span class="sk">C − R (진입/진출 직선)</span><span class="sv" id="sv-straight">—</span></div>
+    <div class="sr"><span class="sk">셀 내 직선 (C/2 − R)</span><span class="sv" id="sv-incell">—</span></div>
+    <div class="sr"><span class="sk">호 길이 (πR/2)</span><span class="sv" id="sv-arc">—</span></div>
+    <div class="sr"><span class="sk">총 경로 길이</span><span class="sv" id="sv-total">—</span></div>
+    <div class="sr" style="margin-top:6px;"><span class="sk">v_turn (횡G 제한)</span><span class="sv" id="sv-vturn">—</span></div>
+    <div class="sr"><span class="sk">v_outer / v_inner</span><span class="sv" id="sv-vwheel">—</span></div>
+    <div class="sr"><span class="sk">원심력 / g</span><span class="sv" id="sv-fg">—</span></div>
+    <div class="sr"><span class="sk">호 시간</span><span class="sv" id="sv-ttime">—</span></div>
+    <div class="sr" style="margin-top:6px;border-top:1px solid var(--border);padding-top:6px;">
+      <span class="sk">셀 내 적합 여부</span><span class="sv" id="sv-fit">—</span>
     </div>
-
-    <div class="section-title">턴 각도</div>
-    <div class="angle-buttons">
-      <button class="angle-btn" data-angle="45">45°</button>
-      <button class="angle-btn active" data-angle="90">90°</button>
-      <button class="angle-btn" data-angle="135">135°</button>
-      <button class="angle-btn" data-angle="180">180°</button>
-    </div>
-    <div class="param-row"><label>커스텀 각도</label><input type="number" id="p-custom-angle" value="90" min="1" max="360" step="1"><em>°</em></div>
-
-    <div id="stats-box">
-      <div class="stat-row"><span class="sk">v_turn</span><span class="sv" id="sv-vturn">—</span></div>
-      <div class="stat-row"><span class="sk">v_outer</span><span class="sv" id="sv-vouter">—</span></div>
-      <div class="stat-row"><span class="sk">v_inner</span><span class="sv" id="sv-vinner">—</span></div>
-      <div class="stat-row"><span class="sk">ω</span><span class="sv" id="sv-omega">—</span></div>
-      <div class="stat-row"><span class="sk">F_c / g</span><span class="sv" id="sv-fg">—</span></div>
-      <div class="stat-row"><span class="sk">턴 시간</span><span class="sv" id="sv-ttime">—</span></div>
-      <div class="stat-row"><span class="sk">총 거리</span><span class="sv" id="sv-dist">—</span></div>
-    </div>
-
+    <div class="sr"><span class="sk">직선 거리 충족</span><span class="sv" id="sv-dmin">—</span></div>
   </div>
 
-  <div id="canvas-area">
-    <canvas id="main-canvas"></canvas>
-    <div id="graphs">
-      <canvas id="g-speed" title="속도"></canvas>
-      <canvas id="g-gforce" title="원심가속도"></canvas>
-      <canvas id="g-omega" title="각속도"></canvas>
-    </div>
-  </div>
+</div>
+
+<div id="canvas-area">
+  <canvas id="cv"></canvas>
+</div>
 </div>
 </div>
 
 <script>
-// ── Params ────────────────────────────────────────────────────────────────────
+// ── Parameters ─────────────────────────────────────────────────────────────────
 const P = {
-  get tread()   { return parseFloat(document.getElementById('p-tread').value) / 1000; },
-  get wheelD()  { return parseFloat(document.getElementById('p-wheel-d').value) / 1000; },
-  get mass()    { return parseFloat(document.getElementById('p-mass').value); },
-  get length()  { return parseFloat(document.getElementById('p-length').value) / 1000; },
-  get vMax()    { return parseFloat(document.getElementById('p-vmax').value); },
-  get accel()   { return parseFloat(document.getElementById('p-accel').value); },
-  get aLat()    { return parseFloat(document.getElementById('p-alat').value); },
-  get radius()  { return parseFloat(document.getElementById('p-radius').value) / 1000; },
-  get turnType(){ return document.querySelector('input[name="turn-type"]:checked').value; },
-  get angle()   { return parseFloat(document.getElementById('p-custom-angle').value) * Math.PI / 180; },
+  get C()    { return +document.getElementById('p-cell').value; },
+  get R()    { return +document.getElementById('p-r').value; },
+  get L()    { return +document.getElementById('p-tread').value; },
+  get bw()   { return +document.getElementById('p-bw').value; },
+  get bh()   { return +document.getElementById('p-bh').value; },
+  get vmax() { return +document.getElementById('p-vmax').value; },
+  get alat() { return +document.getElementById('p-alat').value; },
+  get dmin() { return +document.getElementById('p-dmin').value; },
 };
 
-// ── Trajectory computation ────────────────────────────────────────────────────
-function computeTraj() {
-  const { tread: L, mass: m, vMax, accel, aLat, radius: R, turnType, angle: totalPhi } = P;
-  const isPivot = turnType === 'pivot';
+let turnDir = 'right';  // 'right' | 'left'
 
-  let vTurn, omega, vOuter, vInner;
+// ── Geometry ──────────────────────────────────────────────────────────────────
+// Coordinate system: mm, y increases DOWN (screen coords)
+// 90° right turn (N → E):
+//   Turning cell A: x=[0,C], y=[0,C]
+//   Entry  cell B: x=[0,C], y=[C,2C]   (robot comes from here heading North)
+//   Exit   cell C: x=[C,2C], y=[0,C]   (robot exits here heading East)
+//
+// For a LEFT turn (N → W), mirror everything about x = C/2:
+//   Entry cell B: same (x=[0,C], y=[C,2C])
+//   Exit  cell D: x=[-C,0], y=[0,C]
+//   Arc center: (C/2-R, C/2+R)
+//   P_in: (C/2, C/2+R), P_out: (C/2-R, C/2)
 
-  if (isPivot) {
-    // pivot: constant omega, v_center ≈ 0, each wheel has speed v_pivot = omega * L/2
-    vTurn  = 0;
-    omega  = 2 * vMax / L;     // set by vMax applied to each wheel
-    vOuter = vMax;
-    vInner = -vMax;
-  } else {
-    if (R <= 0) { vTurn = 0; omega = 0; vOuter = 0; vInner = 0; }
-    else {
-      vTurn  = Math.min(vMax, Math.sqrt(aLat * R));
-      omega  = vTurn / R;
-      vOuter = omega * (R + L / 2);
-      vInner = omega * (R - L / 2);
-    }
-  }
+function computeGeo() {
+  const { C, R, L } = P;
+  const isLeft = turnDir === 'left';
 
-  const STRAIGHT = 0.09; // 90mm approach/exit
+  // For right turn: arc center at (C/2+R, C/2+R)
+  // For left  turn: arc center at (C/2-R, C/2+R)
+  const sign = isLeft ? -1 : 1;
+  const arcCx = C/2 + sign*R;
+  const arcCy = C/2 + R;
 
-  // Build trajectory sample points: (phi, x, y, angle, vCenter, vL, vR, aCent)
-  const N = 300;
-  const pts = [];
+  // Turn entry / exit
+  // P_in: robot is traveling North, arrives at bottom of arc
+  const P_in  = { x: C/2, y: C/2 + R };
+  // P_out: robot is traveling East (right) or West (left)
+  const P_out = { x: C/2 + sign*R, y: C/2 };
 
-  function arcPt(phi) {
-    // right turn: ICR at (R, 0) in local frame (robot starts at origin, facing +y)
-    if (isPivot) {
-      const halfL = L / 2;
-      return {
-        x:   0, y: 0,      // pivot: robot center stays put
-        xL: -halfL * Math.sin(phi), yL:  halfL * Math.cos(phi),
-        xR:  halfL * Math.sin(phi), yR: -halfL * Math.cos(phi),
-        angle: phi,
-        aCent: 0,
-      };
-    } else {
-      const cx = R * (1 - Math.cos(phi));
-      const cy = R * Math.sin(phi);
-      const xL = R - (R + L/2) * Math.cos(phi);
-      const yL = (R + L/2) * Math.sin(phi);
-      const xR = R - (R - L/2) * Math.cos(phi);
-      const yR = (R - L/2) * Math.sin(phi);
-      return {
-        x: cx, y: cy, xL, yL, xR, yR,
-        angle: phi,
-        aCent: vTurn > 0 ? vTurn * vTurn / R : 0,
-      };
-    }
-  }
+  // Cell centers
+  const entryCenter = { x: C/2, y: 3*C/2 };             // B center
+  const exitCenter  = { x: C/2 + sign*3*C/2, y: C/2 };  // C center (right of A, or left)
 
+  // Straight lengths (symmetric)
+  const straightLen = C - R;   // = C/2 - R (within turning cell) + C/2 (prev cell half)
+  const inCellLen   = C/2 - R; // straight within the turning cell
+  const arcLen      = Math.PI * R / 2;
+  const totalLen    = 2 * straightLen + arcLen;
+
+  // Speeds
+  const vTurn  = Math.min(P.vmax, R > 0 ? Math.sqrt(P.alat * R / 1000) : 0);  // R in m
+  const omega  = R > 0 ? vTurn / (R / 1000) : 0;
+  const vOuter = omega * (R + L/2) / 1000;
+  const vInner = omega * (R - L/2) / 1000;
+  const fg     = R > 0 ? (vTurn * vTurn) / (R / 1000) / 9.8 : 0;
+  const tArc   = arcLen > 0 && vTurn > 0 ? (arcLen / 1000) / vTurn : 0;
+
+  // Arc sample points (φ: 0 → π/2)
+  const N = 80;
+  const center = [], left = [], right = [];
   for (let i = 0; i <= N; i++) {
-    const phi = totalPhi * i / N;
-    const pt  = arcPt(phi);
-    pt.phi = phi;
-    pt.t   = i / N;
-    pts.push(pt);
+    const phi = (i / N) * Math.PI / 2;
+    // Robot center on arc (formula derived from arc center and start angle)
+    const rx = arcCx - sign * R * Math.cos(phi);
+    const ry = arcCy - R * Math.sin(phi);
+    center.push({ x: rx, y: ry, phi });
+
+    // Heading vector at phi (tangent, CW rotation):
+    // At phi=0: heading North = (0,-1); at phi=π/2: heading East/West = (±1,0)
+    // hx = sign*sin(phi), hy = -cos(phi)
+    const hx = sign * Math.sin(phi), hy = -Math.cos(phi);
+    // Left/right normals (in screen y-down):
+    //   left-of-heading: (hy, -hx)   right-of-heading: (-hy, hx)
+    const lnx = hy, lny = -hx;
+    const rnx = -hy, rny = hx;
+
+    const hw = L / 2;
+    left.push( { x: rx + lnx*hw, y: ry + lny*hw });
+    right.push({ x: rx + rnx*hw, y: ry + rny*hw });
   }
 
-  // Straight sections (approach & exit) in world coords
-  // Entry: robot at origin facing +y (north). Straight N points each.
-  const NS = 40;
-  const entry = [], exit_ = [];
-  for (let i = NS; i >= 0; i--) {
-    const d = STRAIGHT * i / NS;
-    entry.push({ x: 0, y: -d, angle: 0, isEntry: true, frac: 1 - i/NS });
-  }
-
-  const endPt = pts[pts.length - 1];
-  const cosA = Math.cos(totalPhi), sinA = Math.sin(totalPhi);
-
-  for (let i = 0; i <= NS; i++) {
-    const d = STRAIGHT * i / NS;
-    // after turn, robot heading is rotated by totalPhi (right turn = clockwise = angle increase)
-    // post-turn direction: was (0,1) → rotated right by totalPhi → (sinA, cosA)
-    exit_.push({
-      x: endPt.x + sinA * d,
-      y: endPt.y + cosA * d,
-      angle: totalPhi, isExit: true, frac: i/NS
-    });
-  }
-
-  const turnArcLen = isPivot ? (L/2 * totalPhi) : (R * totalPhi);
-  const turnTime   = isPivot ? (totalPhi / omega) : (vTurn > 0 ? turnArcLen / vTurn : 0);
-  const totalDist  = 2 * STRAIGHT + turnArcLen;
-
-  return { pts, entry, exit: exit_, vTurn, omega, vOuter, vInner, L, m,
-           turnArcLen, turnTime, totalDist, STRAIGHT, totalPhi, isPivot };
+  return {
+    C, R, L, sign, isLeft,
+    arcCx, arcCy, P_in, P_out,
+    entryCenter, exitCenter,
+    straightLen, inCellLen, arcLen, totalLen,
+    vTurn, omega, vOuter, vInner, fg, tArc,
+    pts: { center, left, right }, N,
+  };
 }
 
-// ── Canvas sizing ─────────────────────────────────────────────────────────────
-const mainCanvas = document.getElementById('main-canvas');
-const gSpeed     = document.getElementById('g-speed');
-const gGforce    = document.getElementById('g-gforce');
-const gOmega     = document.getElementById('g-omega');
+// ── Position along path (t ∈ [0,1]) ──────────────────────────────────────────
+function pathAt(geo, t) {
+  const { C, R, sign, straightLen, arcLen, totalLen } = geo;
+  const ef = straightLen / totalLen;   // entry fraction
+  const af = arcLen / totalLen;        // arc fraction
 
-function sizeCanvases() {
+  if (t <= ef) {
+    const frac = ef > 0 ? t / ef : 0;
+    // Entry straight: heading North, x=C/2, y from 3C/2 down to C/2+R (up in screen)
+    return { x: C/2, y: 3*C/2 - frac*straightLen, angle: 0 };
+  } else if (t <= ef + af) {
+    const frac = af > 0 ? (t - ef) / af : 0;
+    const phi  = frac * Math.PI / 2;
+    const rx   = geo.arcCx - sign * R * Math.cos(phi);
+    const ry   = geo.arcCy - R * Math.sin(phi);
+    return { x: rx, y: ry, angle: phi * sign };  // angle: 0=N, +π/2=E, -π/2=W
+  } else {
+    const frac = (1 - ef - af) > 0 ? (t - ef - af) / (1 - ef - af) : 0;
+    // Exit straight: heading East/West, y=C/2, x from C/2+sign*R outward
+    return {
+      x: C/2 + sign*(R + frac*straightLen),
+      y: C/2,
+      angle: sign * Math.PI / 2,
+    };
+  }
+}
+
+// ── Canvas / scale ────────────────────────────────────────────────────────────
+const cv = document.getElementById('cv');
+
+function resizeCanvas() {
   const area = document.getElementById('canvas-area');
-  const w    = area.clientWidth - 20;
-  const gh   = 110;
-  const mh   = area.clientHeight - gh - 8 - 20 - 8;
-
-  mainCanvas.width  = w;
-  mainCanvas.height = Math.max(mh, 200);
-  gSpeed.width = gGforce.width = gOmega.width = Math.floor(w / 3) - 6;
-  gSpeed.height = gGforce.height = gOmega.height = gh;
-}
-sizeCanvases();
-window.addEventListener('resize', () => { sizeCanvases(); drawAll(); });
-
-// ── Draw main canvas ──────────────────────────────────────────────────────────
-let animT = 0;   // 0..1 animation progress
-let playing = false;
-let animSpeed = 1.0;
-let lastRAF = null;
-
-function worldToCanvas(traj, wx, wy, cw, ch) {
-  // Fit bounding box of entire trajectory into canvas
-  return worldToCanvasS(traj, wx, wy, cw, ch);
+  const sz   = Math.min(area.clientWidth - 24, area.clientHeight - 24);
+  cv.width = cv.height = Math.max(sz, 200);
 }
 
-function fitTransform(traj) {
-  const allX = [], allY = [];
-  const add = (p) => { allX.push(p.x); allY.push(p.y); };
-  traj.entry.forEach(add);
-  traj.pts.forEach(add);
-  traj.exit.forEach(add);
-  // wheel trajectories
-  traj.pts.forEach(p => {
-    if (p.xL !== undefined) { allX.push(p.xL, p.xR); allY.push(p.yL, p.yR); }
-  });
-
-  let minX = Math.min(...allX), maxX = Math.max(...allX);
-  let minY = Math.min(...allY), maxY = Math.max(...allY);
-  const pad = 0.04;
-  minX -= pad; maxX += pad; minY -= pad; maxY += pad;
-
-  const cw = mainCanvas.width, ch = mainCanvas.height;
-  const sx = cw / (maxX - minX || 1);
-  const sy = ch / (maxY - minY || 1);
-  const scale = Math.min(sx, sy) * 0.88;
-  const offX = cw/2 - scale*(minX+maxX)/2;
-  const offY = ch/2 + scale*(minY+maxY)/2;  // flip y
-
+function makeTransform(C, isLeft) {
+  // View: show turning cell + entry cell below + exit cell right/left
+  // bounding box in mm (right turn):
+  //   x: isLeft ? -C : 0  to  2C
+  //   y: 0 to 2C
+  const PAD  = C * 0.15;
+  const xMin = isLeft ? -C - PAD : -PAD;
+  const xMax = isLeft ? C + PAD  : 2*C + PAD;
+  const yMin = -PAD;
+  const yMax = 2*C + PAD;
+  const rangeX = xMax - xMin, rangeY = yMax - yMin;
+  const scale  = Math.min(cv.width / rangeX, cv.height / rangeY);
+  const offX   = (cv.width  - rangeX*scale) / 2 - xMin*scale;
+  const offY   = (cv.height - rangeY*scale) / 2 - yMin*scale;
   return { scale, offX, offY };
 }
 
-function toCanvas(tf, wx, wy) {
-  return [ tf.offX + tf.scale * wx, tf.offY - tf.scale * wy ];
+function px(tf, x, y) {
+  return [tf.offX + x*tf.scale, tf.offY + y*tf.scale];
 }
 
-function drawRobotGhost(ctx, tf, x, y, angle, L, rLen, alpha) {
-  const [cx, cy] = toCanvas(tf, x, y);
+// ── Drawing helpers ───────────────────────────────────────────────────────────
+function drawLine(ctx, tf, x0,y0,x1,y1) {
+  ctx.beginPath();
+  ctx.moveTo(...px(tf,x0,y0));
+  ctx.lineTo(...px(tf,x1,y1));
+  ctx.stroke();
+}
+
+function drawPolyline(ctx, tf, pts) {
+  if (!pts.length) return;
+  ctx.beginPath();
+  ctx.moveTo(...px(tf, pts[0].x, pts[0].y));
+  for (let i = 1; i < pts.length; i++) ctx.lineTo(...px(tf, pts[i].x, pts[i].y));
+  ctx.stroke();
+}
+
+function drawRobotBody(ctx, tf, x, y, angle, bw, bh, alpha) {
+  const [cx, cy] = px(tf, x, y);
+  const s = tf.scale;
   ctx.save();
   ctx.translate(cx, cy);
-  ctx.rotate(angle);  // angle = phi (right-turn clockwise in physics = negative in canvas y-flip)
-  const sw = tf.scale * L, sh = tf.scale * rLen;
+  ctx.rotate(angle);               // 0=N, +π/2=E, -π/2=W (matches robotAt)
   ctx.globalAlpha = alpha;
-  ctx.strokeStyle = '#cdd6f4';
-  ctx.lineWidth = 1.5;
-  ctx.strokeRect(-sw/2, -sh/2, sw, sh);
-  // direction indicator
+  const hw = (bw/2)*s, hh = (bh/2)*s;
+  const ch = Math.min(hw, hh) * 0.2;
   ctx.beginPath();
-  ctx.moveTo(0, -sh/2);
-  ctx.lineTo(0, -sh/2 - tf.scale*0.015);
-  ctx.strokeStyle = '#89b4fa';
-  ctx.lineWidth = 2;
-  ctx.stroke();
+  ctx.moveTo(-hw+ch,-hh); ctx.lineTo(hw-ch,-hh);
+  ctx.lineTo(hw,-hh+ch);  ctx.lineTo(hw,hh-ch);
+  ctx.lineTo(hw-ch,hh);   ctx.lineTo(-hw+ch,hh);
+  ctx.lineTo(-hw,hh-ch);  ctx.lineTo(-hw,-hh+ch);
+  ctx.closePath();
+  ctx.fillStyle = '#162540';
+  ctx.strokeStyle = '#3a8fe8';
+  ctx.lineWidth = 1.5;
+  ctx.fill(); ctx.stroke();
+  // Forward arrow
+  ctx.beginPath();
+  ctx.moveTo(0,-hh*0.7); ctx.lineTo(-hh*0.18,-hh*0.25); ctx.lineTo(hh*0.18,-hh*0.25);
+  ctx.closePath();
+  ctx.fillStyle = 'rgba(255,215,50,0.85)';
+  ctx.fill();
   ctx.globalAlpha = 1;
   ctx.restore();
 }
 
-function drawArrow(ctx, x0, y0, x1, y1, color, width=2) {
-  const dx = x1-x0, dy = y1-y0;
-  const len = Math.sqrt(dx*dx+dy*dy);
-  if (len < 2) return;
-  ctx.beginPath();
-  ctx.moveTo(x0, y0);
-  ctx.lineTo(x1, y1);
+function drawDimLine(ctx, tf, x0,y0,x1,y1, label, color='#6c7086') {
+  const [px0,py0] = px(tf,x0,y0);
+  const [px1,py1] = px(tf,x1,y1);
   ctx.strokeStyle = color;
-  ctx.lineWidth = width;
-  ctx.stroke();
-  const angle = Math.atan2(dy, dx);
-  const hs = Math.min(len*0.35, 10);
-  ctx.beginPath();
-  ctx.moveTo(x1, y1);
-  ctx.lineTo(x1 - hs*Math.cos(angle-0.4), y1 - hs*Math.sin(angle-0.4));
-  ctx.lineTo(x1 - hs*Math.cos(angle+0.4), y1 - hs*Math.sin(angle+0.4));
-  ctx.closePath();
-  ctx.fillStyle = color;
-  ctx.fill();
-}
-
-function drawMain(traj, t) {
-  const ctx = mainCanvas.getContext('2d');
-  const cw = mainCanvas.width, ch = mainCanvas.height;
-  ctx.fillStyle = '#0d0d1a';
-  ctx.fillRect(0, 0, cw, ch);
-
-  const tf = fitTransform(traj);
-
-  // Grid (metric)
-  ctx.strokeStyle = 'rgba(56,56,81,0.5)';
-  ctx.lineWidth = 1;
-  const gridStep = 0.05; // 50mm
-  // estimate grid range
-  const allPts = [...traj.entry, ...traj.pts, ...traj.exit];
-  const xs = allPts.map(p=>p.x), ys = allPts.map(p=>p.y);
-  const gx0 = Math.floor(Math.min(...xs)/gridStep)*gridStep - gridStep;
-  const gx1 = Math.ceil(Math.max(...xs)/gridStep)*gridStep + gridStep;
-  const gy0 = Math.floor(Math.min(...ys)/gridStep)*gridStep - gridStep;
-  const gy1 = Math.ceil(Math.max(...ys)/gridStep)*gridStep + gridStep;
-  for (let gx = gx0; gx <= gx1; gx += gridStep) {
-    const [cx0] = toCanvas(tf, gx, gy0); const [cx1] = toCanvas(tf, gx, gy1);
-    const [,cy0] = toCanvas(tf, gx, gy0); const [,cy1] = toCanvas(tf, gx, gy1);
-    ctx.beginPath(); ctx.moveTo(cx0, cy0); ctx.lineTo(cx1, cy1); ctx.stroke();
-  }
-  for (let gy = gy0; gy <= gy1; gy += gridStep) {
-    const [cx0,cy0] = toCanvas(tf, gx0, gy);
-    const [cx1,cy1] = toCanvas(tf, gx1, gy);
-    ctx.beginPath(); ctx.moveTo(cx0, cy0); ctx.lineTo(cx1, cy1); ctx.stroke();
-  }
-
-  // Entry straight
-  ctx.beginPath();
-  ctx.strokeStyle = 'rgba(137,180,250,0.3)';
-  ctx.lineWidth = 1.5;
-  ctx.setLineDash([4, 4]);
-  for (let i = 0; i < traj.entry.length; i++) {
-    const [cx, cy] = toCanvas(tf, traj.entry[i].x, traj.entry[i].y);
-    i === 0 ? ctx.moveTo(cx, cy) : ctx.lineTo(cx, cy);
-  }
-  ctx.stroke();
-
-  // Exit straight
-  ctx.beginPath();
-  ctx.strokeStyle = 'rgba(137,180,250,0.3)';
-  for (let i = 0; i < traj.exit.length; i++) {
-    const [cx, cy] = toCanvas(tf, traj.exit[i].x, traj.exit[i].y);
-    i === 0 ? ctx.moveTo(cx, cy) : ctx.lineTo(cx, cy);
-  }
-  ctx.stroke();
+  ctx.fillStyle   = color;
+  ctx.lineWidth   = 1;
+  ctx.setLineDash([3,4]);
+  ctx.beginPath(); ctx.moveTo(px0,py0); ctx.lineTo(px1,py1); ctx.stroke();
   ctx.setLineDash([]);
-
-  // Wheel trajectories (full) — shown for both arc and pivot
-  // Left wheel
-  ctx.beginPath();
-  ctx.strokeStyle = 'rgba(243,139,168,0.35)';
-  ctx.lineWidth = 1.5;
-  for (let i = 0; i < traj.pts.length; i++) {
-    const p = traj.pts[i];
-    const [cx, cy] = toCanvas(tf, p.xL, p.yL);
-    i === 0 ? ctx.moveTo(cx, cy) : ctx.lineTo(cx, cy);
-  }
-  ctx.stroke();
-
-  // Right wheel
-  ctx.beginPath();
-  ctx.strokeStyle = 'rgba(137,180,250,0.35)';
-  ctx.lineWidth = 1.5;
-  for (let i = 0; i < traj.pts.length; i++) {
-    const p = traj.pts[i];
-    const [cx, cy] = toCanvas(tf, p.xR, p.yR);
-    i === 0 ? ctx.moveTo(cx, cy) : ctx.lineTo(cx, cy);
-  }
-  ctx.stroke();
-
-  // Center trajectory full (dim)
-  ctx.beginPath();
-  ctx.strokeStyle = 'rgba(249,226,175,0.25)';
-  ctx.lineWidth = 2;
-  for (let i = 0; i < traj.pts.length; i++) {
-    const [cx, cy] = toCanvas(tf, traj.pts[i].x, traj.pts[i].y);
-    i === 0 ? ctx.moveTo(cx, cy) : ctx.lineTo(cx, cy);
-  }
-  ctx.stroke();
-
-  // Traveled portion
-  const cutIdx = Math.floor(t * (traj.pts.length - 1));
-  if (cutIdx > 0) {
+  // Arrowheads
+  const dx=px1-px0, dy=py1-py0, len=Math.sqrt(dx*dx+dy*dy)||1;
+  const ux=dx/len, uy=dy/len, hs=7;
+  [[px0,py0,1],[px1,py1,-1]].forEach(([ax,ay,s]) => {
     ctx.beginPath();
-    ctx.strokeStyle = '#f9e2af';
-    ctx.lineWidth = 2.5;
-    for (let i = 0; i <= cutIdx; i++) {
-      const [cx, cy] = toCanvas(tf, traj.pts[i].x, traj.pts[i].y);
-      i === 0 ? ctx.moveTo(cx, cy) : ctx.lineTo(cx, cy);
-    }
-    ctx.stroke();
-
-    if (cutIdx > 0) {
-      // Left traveled
-      ctx.beginPath(); ctx.strokeStyle = '#f38ba8'; ctx.lineWidth = 2;
-      for (let i = 0; i <= cutIdx; i++) {
-        const [cx, cy] = toCanvas(tf, traj.pts[i].xL, traj.pts[i].yL);
-        i === 0 ? ctx.moveTo(cx, cy) : ctx.lineTo(cx, cy);
-      }
-      ctx.stroke();
-      // Right traveled
-      ctx.beginPath(); ctx.strokeStyle = '#89b4fa'; ctx.lineWidth = 2;
-      for (let i = 0; i <= cutIdx; i++) {
-        const [cx, cy] = toCanvas(tf, traj.pts[i].xR, traj.pts[i].yR);
-        i === 0 ? ctx.moveTo(cx, cy) : ctx.lineTo(cx, cy);
-      }
-      ctx.stroke();
-    }
-  }
-
-  // Ghost robots at 0, 0.5, 1
-  for (const frac of [0, 0.5, 1]) {
-    const idx = Math.floor(frac * (traj.pts.length - 1));
-    const p   = traj.pts[idx];
-    const a   = traj.isPivot ? p.phi : p.phi; // clockwise in our coord system
-    drawRobotGhost(ctx, tf, p.x, p.y, a, traj.L, P.length / 1000, frac === 0 || frac === 1 ? 0.25 : 0.18);
-  }
-
-  // Current robot
-  const curPt = traj.pts[cutIdx] || traj.pts[0];
-  drawRobotGhost(ctx, tf, curPt.x, curPt.y, curPt.phi, traj.L, P.length / 1000, 0.85);
-
-  // ICR marker
-  {
-    const icrX = traj.isPivot ? 0 : P.radius / 1000;
-    const icrY = 0;
-    const [icx, icy] = toCanvas(tf, icrX, icrY);
-    ctx.beginPath();
-    ctx.arc(icx, icy, 5, 0, Math.PI*2);
-    ctx.strokeStyle = '#a6e3a1';
-    ctx.lineWidth = 1.5;
-    ctx.stroke();
-    ctx.beginPath();
-    ctx.moveTo(icx-8, icy); ctx.lineTo(icx+8, icy);
-    ctx.moveTo(icx, icy-8); ctx.lineTo(icx, icy+8);
-    ctx.stroke();
-    ctx.fillStyle = '#a6e3a1';
-    ctx.font = '10px monospace';
-    ctx.fillText('ICR', icx+7, icy-6);
-  }
-
-  // Centrifugal force arrow at current position
-  if (!traj.isPivot && traj.vTurn > 0) {
-    const aCent = curPt.aCent || 0;
-    if (aCent > 0.1) {
-      const R = P.radius / 1000;
-      const arrowLen = tf.scale * (aCent / 9.8) * 0.05; // scale visual
-      const [cx0, cy0] = toCanvas(tf, curPt.x, curPt.y);
-      // centrifugal = away from ICR → direction from ICR to robot center
-      // ICR is at (R, 0) in our frame; robot is at (curPt.x, curPt.y)
-      const dx = curPt.x - R, dy = curPt.y - 0;
-      const len = Math.sqrt(dx*dx + dy*dy) || 1;
-      const [tx, ty] = toCanvas(tf, curPt.x + dx/len * arrowLen / tf.scale, curPt.y + dy/len * arrowLen / tf.scale);
-      drawArrow(ctx, cx0, cy0, tx, ty, '#cba6f7', 2.5);
-
-      ctx.fillStyle = '#cba6f7';
-      ctx.font = 'bold 10px monospace';
-      ctx.fillText(`${(aCent/9.8).toFixed(2)}g`, tx+4, ty-4);
-    }
-  }
-
-  // Legend
-  ctx.font = '10px sans-serif';
-  ctx.fillStyle = '#f9e2af'; ctx.fillText('■ 중심', 10, 18);
-  if (!traj.isPivot) {
-    ctx.fillStyle = '#f38ba8'; ctx.fillText('■ 좌바퀴', 60, 18);
-    ctx.fillStyle = '#89b4fa'; ctx.fillText('■ 우바퀴', 118, 18);
-  }
-  ctx.fillStyle = '#cba6f7'; ctx.fillText('→ 원심력', 178, 18);
-  ctx.fillStyle = '#a6e3a1'; ctx.fillText('+ ICR', traj.isPivot ? 60 : 238, 18);
-}
-
-// ── Graph drawing ─────────────────────────────────────────────────────────────
-function drawGraph(canvas, title, lines, yLabel, yUnit, t) {
-  const ctx = canvas.getContext('2d');
-  const cw = canvas.width, ch = canvas.height;
-  ctx.fillStyle = '#1e1e2e';
-  ctx.fillRect(0, 0, cw, ch);
-
-  const pad = { l:38, r:8, t:18, b:20 };
-  const gw = cw - pad.l - pad.r, gh = ch - pad.t - pad.b;
-
-  // Title
-  ctx.fillStyle = '#6c7086';
-  ctx.font = '10px sans-serif';
-  ctx.textAlign = 'left';
-  ctx.fillText(title, pad.l, 12);
-
-  // Axis
-  ctx.strokeStyle = '#383851';
-  ctx.lineWidth = 1;
-  ctx.beginPath();
-  ctx.moveTo(pad.l, pad.t); ctx.lineTo(pad.l, pad.t+gh);
-  ctx.lineTo(pad.l+gw, pad.t+gh);
-  ctx.stroke();
-
-  if (!lines.length) return;
-
-  // Find y range
-  let yMin = Infinity, yMax = -Infinity;
-  for (const { data } of lines) {
-    for (const v of data) { if (v < yMin) yMin = v; if (v > yMax) yMax = v; }
-  }
-  if (yMin === yMax) { yMin -= 1; yMax += 1; }
-  const yPad = (yMax - yMin) * 0.1;
-  yMin -= yPad; yMax += yPad;
-
-  const sx = (i, n) => pad.l + (i / (n-1)) * gw;
-  const sy = (v) => pad.t + gh - (v - yMin) / (yMax - yMin) * gh;
-
-  // Grid lines
-  ctx.strokeStyle = 'rgba(56,56,81,0.6)';
-  ctx.lineWidth = 0.5;
-  const ntick = 4;
-  ctx.font = '9px monospace';
-  ctx.fillStyle = '#6c7086';
-  for (let i = 0; i <= ntick; i++) {
-    const v = yMin + (yMax - yMin) * i / ntick;
-    const y = sy(v);
-    ctx.beginPath(); ctx.moveTo(pad.l, y); ctx.lineTo(pad.l+gw, y); ctx.stroke();
-    ctx.textAlign = 'right';
-    ctx.fillText(v.toFixed(Math.abs(v) < 10 ? 1 : 0), pad.l-3, y+3);
-  }
-  ctx.fillStyle = '#6c7086';
+    ctx.moveTo(ax, ay);
+    ctx.lineTo(ax-s*ux*hs + uy*hs*0.4, ay-s*uy*hs - ux*hs*0.4);
+    ctx.lineTo(ax-s*ux*hs - uy*hs*0.4, ay-s*uy*hs + ux*hs*0.4);
+    ctx.closePath(); ctx.fill();
+  });
+  // Label
+  ctx.font = `bold ${Math.max(9,Math.round(tf.scale*3.5))}px monospace`;
   ctx.textAlign = 'center';
-  ctx.fillText(yUnit, pad.l/2, pad.t + gh/2);
+  ctx.textBaseline = 'middle';
+  ctx.fillText(label, (px0+px1)/2 + uy*13, (py0+py1)/2 - ux*13);
+}
 
-  // Lines
-  for (const { data, color } of lines) {
-    ctx.beginPath();
-    ctx.strokeStyle = color;
-    ctx.lineWidth = 1.5;
-    for (let i = 0; i < data.length; i++) {
-      const x = sx(i, data.length), y = sy(data[i]);
-      i === 0 ? ctx.moveTo(x, y) : ctx.lineTo(x, y);
-    }
-    ctx.stroke();
-  }
+// ── Main draw ─────────────────────────────────────────────────────────────────
+let animT  = 0;
+let playing = false;
+let animSpeed = 1.0;
+let lastTS = null;
 
-  // Playhead
-  const px = pad.l + t * gw;
-  ctx.beginPath();
-  ctx.moveTo(px, pad.t);
-  ctx.lineTo(px, pad.t+gh);
-  ctx.strokeStyle = 'rgba(249,226,175,0.7)';
-  ctx.lineWidth = 1.5;
-  ctx.setLineDash([3,3]);
-  ctx.stroke();
+function draw() {
+  const geo = computeGeo();
+  const { C, R, L, sign, isLeft, arcCx, arcCy } = geo;
+  const tf = makeTransform(C, isLeft);
+
+  const ctx = cv.getContext('2d');
+  ctx.clearRect(0, 0, cv.width, cv.height);
+  ctx.fillStyle = '#0d0d1a';
+  ctx.fillRect(0, 0, cv.width, cv.height);
+
+  // ── Cell backgrounds ──────────────────────────────────────────────────────
+  const cellBg = 'rgba(137,180,250,0.05)';
+  const goalBg = 'rgba(166,227,161,0.08)';
+  const [ax,ay] = px(tf,0,0);
+  const cs = C*tf.scale;
+  ctx.fillStyle = cellBg;
+  ctx.fillRect(ax,ay,cs,cs);           // A: turning cell
+  ctx.fillRect(...px(tf,0,C), cs,cs);  // B: entry cell
+  ctx.fillStyle = goalBg;
+  ctx.fillRect(...px(tf,sign*C, 0), cs, cs); // C: exit cell (highlighted)
+
+  // Cell labels
+  ctx.fillStyle = 'rgba(108,112,134,0.7)';
+  ctx.font = `${Math.max(9,Math.round(tf.scale*4))}px sans-serif`;
+  ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+  ctx.fillText('턴 셀', ...px(tf, C/2, C/2));
+  ctx.fillText('진입 셀', ...px(tf, C/2, 3*C/2));
+  ctx.fillText('진출 셀', ...px(tf, sign*C + sign*C/2, C/2));
+
+  // ── Walls ─────────────────────────────────────────────────────────────────
+  ctx.strokeStyle = '#cdd6f4';
+  ctx.lineWidth = 2.5;
+  ctx.lineCap = 'square';
+
+  // Outer boundary walls
+  // North of A
+  drawLine(ctx,tf, 0,0, C,0);
+  // West of A+B (left column)
+  drawLine(ctx,tf, 0,0, 0,2*C);
+  // South of B
+  drawLine(ctx,tf, 0,2*C, C,2*C);
+  // East of B (the corner: x=C, y=C to 2C — wall since exit cell is UP, not right)
+  drawLine(ctx,tf, C,C, C,2*C);
+  // North of exit cell
+  drawLine(ctx,tf, sign*C,0, sign*2*C,0);
+  // Outer side of exit cell
+  drawLine(ctx,tf, sign*2*C,0, sign*2*C,C);
+  // South of exit cell
+  drawLine(ctx,tf, sign*C,C, sign*2*C,C);
+
+  // Open passages (dashed guides)
+  ctx.strokeStyle = 'rgba(205,214,244,0.15)';
+  ctx.lineWidth = 1; ctx.setLineDash([4,4]);
+  drawLine(ctx,tf, 0,C, C,C);           // A–B boundary (open)
+  drawLine(ctx,tf, sign*C,0, sign*C,C); // A–C boundary (open)
   ctx.setLineDash([]);
-}
 
-function buildGraphData(traj) {
-  const N = traj.pts.length;
-  const vCenter = [], vLeft = [], vRight = [], gforce = [], omegaArr = [];
+  // ── Wheel tracks (full path, dim) ──────────────────────────────────────────
+  const entryLen = geo.straightLen;
 
-  for (let i = 0; i < N; i++) {
-    vCenter.push(traj.vTurn);
-    vLeft.push(traj.vOuter);
-    vRight.push(traj.vInner);
-    gforce.push(traj.pts[i].aCent / 9.8);
-    omegaArr.push(traj.omega);
+  // Entry straight wheel tracks
+  const lhw = L/2;
+  ctx.lineWidth = 1.5;
+  ctx.strokeStyle = 'rgba(243,139,168,0.28)';
+  drawLine(ctx,tf, C/2-lhw, 3*C/2, C/2-lhw, C/2+R);  // left wheel entry
+  ctx.strokeStyle = 'rgba(137,180,250,0.28)';
+  drawLine(ctx,tf, C/2+lhw, 3*C/2, C/2+lhw, C/2+R);  // right wheel entry (sign flipped for left turn)
+
+  // Arc wheel tracks
+  ctx.strokeStyle = 'rgba(243,139,168,0.28)';
+  drawPolyline(ctx, tf, geo.pts.left);
+  ctx.strokeStyle = 'rgba(137,180,250,0.28)';
+  drawPolyline(ctx, tf, geo.pts.right);
+
+  // Exit straight wheel tracks
+  // For right turn: heading East, left=North offset (-y), right=South offset (+y)
+  ctx.strokeStyle = 'rgba(243,139,168,0.28)';
+  drawLine(ctx,tf, C/2+sign*R, C/2-lhw, sign*3*C/2, C/2-lhw);
+  ctx.strokeStyle = 'rgba(137,180,250,0.28)';
+  drawLine(ctx,tf, C/2+sign*R, C/2+lhw, sign*3*C/2, C/2+lhw);
+
+  // ── Center path (full, dim) ────────────────────────────────────────────────
+  ctx.strokeStyle = 'rgba(249,226,175,0.22)';
+  ctx.lineWidth = 2;
+  // Entry straight center
+  drawLine(ctx,tf, C/2, 3*C/2, C/2, C/2+R);
+  // Arc center
+  drawPolyline(ctx, tf, geo.pts.center);
+  // Exit straight center
+  drawLine(ctx,tf, C/2+sign*R, C/2, sign*3*C/2, C/2);
+
+  // ── Animated traveled portion ──────────────────────────────────────────────
+  if (animT > 0) {
+    const ef = entryLen / geo.totalLen;
+    const af = geo.arcLen / geo.totalLen;
+
+    ctx.lineWidth = 2.5;
+
+    const drawTraveledEntry = (tFrac) => {
+      // tFrac 0→1 along entry straight
+      const yStart = 3*C/2, yEnd = C/2+R;
+      const yNow = yStart - tFrac*(yStart-yEnd);
+      ctx.strokeStyle = '#f9e2af';
+      drawLine(ctx,tf, C/2,yStart, C/2,yNow);
+      ctx.strokeStyle = '#f38ba8';
+      drawLine(ctx,tf, C/2-lhw,yStart, C/2-lhw,yNow);
+      ctx.strokeStyle = '#89b4fa';
+      drawLine(ctx,tf, C/2+lhw,yStart, C/2+lhw,yNow);
+    };
+
+    const drawTraveledArc = (phiMax) => {
+      const ni = Math.floor(phiMax / (Math.PI/2) * geo.N);
+      const sub = {
+        center: geo.pts.center.slice(0,ni+1),
+        left:   geo.pts.left.slice(0,ni+1),
+        right:  geo.pts.right.slice(0,ni+1),
+      };
+      ctx.strokeStyle = '#f9e2af'; drawPolyline(ctx,tf,sub.center);
+      ctx.strokeStyle = '#f38ba8'; drawPolyline(ctx,tf,sub.left);
+      ctx.strokeStyle = '#89b4fa'; drawPolyline(ctx,tf,sub.right);
+    };
+
+    const drawTraveledExit = (tFrac) => {
+      const xStart = C/2+sign*R, xEnd = sign*3*C/2;
+      const xNow = xStart + tFrac*(xEnd-xStart);
+      ctx.strokeStyle = '#f9e2af';
+      drawLine(ctx,tf, xStart,C/2, xNow,C/2);
+      ctx.strokeStyle = '#f38ba8';
+      drawLine(ctx,tf, xStart,C/2-lhw, xNow,C/2-lhw);
+      ctx.strokeStyle = '#89b4fa';
+      drawLine(ctx,tf, xStart,C/2+lhw, xNow,C/2+lhw);
+    };
+
+    if (animT <= ef) {
+      drawTraveledEntry(ef > 0 ? animT/ef : 1);
+    } else if (animT <= ef+af) {
+      drawTraveledEntry(1);
+      drawTraveledArc((animT-ef)/af * Math.PI/2);
+    } else {
+      drawTraveledEntry(1);
+      drawTraveledArc(Math.PI/2);
+      drawTraveledExit(af+ef < 1 ? (animT-ef-af)/(1-ef-af) : 1);
+    }
   }
 
-  return { vCenter, vLeft, vRight, gforce, omega: omegaArr };
+  // ── Ghost robots at key positions ──────────────────────────────────────────
+  for (const [t,a] of [[0,0.18],[0.5,0.12],[1,0.18]]) {
+    const p = pathAt(geo, t);
+    drawRobotBody(ctx, tf, p.x, p.y, p.angle, P.bw, P.bh, a);
+  }
+  // Animated robot
+  {
+    const p = pathAt(geo, animT);
+    drawRobotBody(ctx, tf, p.x, p.y, p.angle, P.bw, P.bh, 0.9);
+  }
+
+  // ── Arc center (ICR) ───────────────────────────────────────────────────────
+  {
+    const [icx,icy] = px(tf, arcCx, arcCy);
+    ctx.beginPath(); ctx.arc(icx,icy,5,0,Math.PI*2);
+    ctx.strokeStyle='#a6e3a1'; ctx.lineWidth=1.5; ctx.stroke();
+    ctx.beginPath();
+    ctx.moveTo(icx-8,icy); ctx.lineTo(icx+8,icy);
+    ctx.moveTo(icx,icy-8); ctx.lineTo(icx,icy+8);
+    ctx.stroke();
+    ctx.fillStyle='#a6e3a1';
+    ctx.font='10px monospace'; ctx.textAlign='left'; ctx.textBaseline='top';
+    ctx.fillText('ICR',icx+7,icy+2);
+    // R annotation line
+    const p0 = geo.pts.center[Math.floor(geo.N/4)];
+    ctx.strokeStyle='rgba(166,227,161,0.4)'; ctx.lineWidth=1; ctx.setLineDash([3,3]);
+    ctx.beginPath(); ctx.moveTo(icx,icy); ctx.lineTo(...px(tf,p0.x,p0.y)); ctx.stroke();
+    ctx.setLineDash([]);
+    const [mx,my]=px(tf,(arcCx+p0.x)/2,(arcCy+p0.y)/2);
+    ctx.fillStyle='rgba(166,227,161,0.8)';
+    ctx.font=`bold ${Math.max(9,Math.round(tf.scale*3.5))}px monospace`;
+    ctx.textAlign='center'; ctx.textBaseline='middle';
+    ctx.fillText(`R=${R}`, mx, my);
+  }
+
+  // ── Dimension annotations ──────────────────────────────────────────────────
+  const annColor = '#6c7086';
+  // Entry straight annotation (on the right of entry column)
+  drawDimLine(ctx,tf, C+10,3*C/2, C+10,C/2+R,
+    `${geo.straightLen.toFixed(0)}mm`, annColor);
+  // Exit straight annotation (below exit row)
+  drawDimLine(ctx,tf, C/2+sign*R, C+10, sign*3*C/2, C+10,
+    `${geo.straightLen.toFixed(0)}mm`, annColor);
+  // In-cell straight (within turning cell)
+  if (geo.inCellLen > 2) {
+    ctx.strokeStyle='rgba(108,112,134,0.5)'; ctx.lineWidth=1; ctx.setLineDash([2,4]);
+    drawLine(ctx,tf, C/2,C/2+R, C/2,C);  // entry straight within cell
+    ctx.setLineDash([]);
+  }
+
+  // ── Cell size guide ────────────────────────────────────────────────────────
+  ctx.strokeStyle='rgba(56,56,81,0.6)'; ctx.lineWidth=0.5;
+  // Cell center cross
+  const [cx0,cy0]=px(tf,C/2,C/2);
+  ctx.beginPath();
+  ctx.moveTo(cx0-6,cy0); ctx.lineTo(cx0+6,cy0);
+  ctx.moveTo(cx0,cy0-6); ctx.lineTo(cx0,cy0+6);
+  ctx.stroke();
+
+  // ── Warn if arc exceeds turning cell ─────────────────────────────────────
+  if (R > C/2) {
+    // Highlight out-of-bounds arc regions
+    ctx.strokeStyle = 'rgba(243,139,168,0.4)';
+    ctx.lineWidth = 3;
+    // P_in is in the entry cell (y > C), P_out is in the exit cell (x > C)
+    const warningPts = geo.pts.center.filter(p => p.y > C || Math.abs(p.x - C/2) > C/2);
+    if (warningPts.length) {
+      ctx.beginPath();
+      warningPts.forEach((p,i) => {
+        const [px_, py_] = px(tf,p.x,p.y);
+        i===0 ? ctx.moveTo(px_,py_) : ctx.lineTo(px_,py_);
+      });
+      ctx.stroke();
+    }
+  }
+
+  updateStats(geo);
 }
 
-// ── Stats update ──────────────────────────────────────────────────────────────
-function updateStats(traj) {
-  const set = (id, v) => { document.getElementById(id).textContent = v; };
-  set('sv-vturn',  traj.vTurn.toFixed(3) + ' m/s');
-  set('sv-vouter', traj.vOuter.toFixed(3) + ' m/s');
-  set('sv-vinner', traj.vInner.toFixed(3) + ' m/s');
-  set('sv-omega',  (traj.omega * 180 / Math.PI).toFixed(1) + ' °/s');
-  const fg = traj.vTurn > 0 && !traj.isPivot ? (traj.vTurn*traj.vTurn / P.radius * 1000 / 9.8) : 0;
-  set('sv-fg',     fg.toFixed(3) + ' g');
-  set('sv-ttime',  traj.turnTime.toFixed(4) + ' s');
-  set('sv-dist',   (traj.totalDist * 1000).toFixed(1) + ' mm');
+// ── Stats ──────────────────────────────────────────────────────────────────────
+function sv(id, text, cls='') {
+  const el = document.getElementById(id);
+  el.textContent = text;
+  el.className = 'sv' + (cls ? ' ' + cls : '');
 }
 
-// ── Main draw loop ────────────────────────────────────────────────────────────
-let traj = null;
-let graphData = null;
+function updateStats(geo) {
+  const { C, R, straightLen, inCellLen, arcLen, totalLen,
+          vTurn, vOuter, vInner, fg, tArc } = geo;
+  const dmin = P.dmin;
+  const fits = R <= C/2;
+  const straight_ok = straightLen >= dmin;
 
-function drawAll() {
-  traj = computeTraj();
-  graphData = buildGraphData(traj);
-  updateStats(traj);
-  drawMain(traj, animT);
-  drawGraph(gSpeed,  '속도 (m/s)',    [
-    { data: graphData.vCenter, color: '#f9e2af' },
-    { data: graphData.vLeft,   color: '#f38ba8' },
-    { data: graphData.vRight,  color: '#89b4fa' },
-  ], 'm/s', 'm/s', animT);
-  drawGraph(gGforce, '원심 (g)',      [{ data: graphData.gforce, color: '#cba6f7' }], 'g', 'g', animT);
-  drawGraph(gOmega,  '각속도 (°/s)', [{ data: graphData.omega.map(v=>v*180/Math.PI), color: '#a6e3a1' }], '°/s', '°/s', animT);
+  sv('sv-straight', `${straightLen.toFixed(1)} mm`, fits && straight_ok ? 'ok' : straight_ok ? 'warn' : 'err');
+  sv('sv-incell', `${inCellLen.toFixed(1)} mm`, inCellLen >= 0 ? '' : 'err');
+  sv('sv-arc',     `${arcLen.toFixed(1)} mm`);
+  sv('sv-total',   `${totalLen.toFixed(1)} mm`);
+  sv('sv-vturn',   `${vTurn.toFixed(3)} m/s`);
+  sv('sv-vwheel',  `${vOuter.toFixed(3)} / ${vInner.toFixed(3)} m/s`);
+  sv('sv-fg',      `${fg.toFixed(3)} g`);
+  sv('sv-ttime',   `${(tArc*1000).toFixed(1)} ms`);
+  sv('sv-fit', fits ? `✓ R(${R}) ≤ C/2(${C/2})` : `✗ R(${R}) > C/2(${C/2})`,
+     fits ? 'ok' : 'err');
+  sv('sv-dmin', straight_ok ? `✓ ${straightLen.toFixed(0)} ≥ ${dmin}mm` : `✗ ${straightLen.toFixed(0)} < ${dmin}mm`,
+     straight_ok ? 'ok' : 'err');
 }
 
 // ── Animation ─────────────────────────────────────────────────────────────────
-let lastTimestamp = null;
-
 function animFrame(ts) {
   if (!playing) return;
-  if (lastTimestamp === null) lastTimestamp = ts;
-  const dtMs = ts - lastTimestamp;
-  lastTimestamp = ts;
-
-  if (traj) {
-    const duration = traj.turnTime > 0 ? traj.turnTime * 1000 : 1000;
-    animT = Math.min(animT + (dtMs / duration) * animSpeed, 1);
-  }
-
-  drawAll();
-
+  if (lastTS === null) lastTS = ts;
+  const dt = ts - lastTS;
+  lastTS = ts;
+  const geo = computeGeo();
+  const dur = (geo.tArc > 0 ? geo.tArc * (geo.totalLen / geo.arcLen) : 2) * 1000 / animSpeed;
+  animT = Math.min(animT + dt / dur, 1);
+  draw();
   if (animT >= 1) {
     playing = false;
     document.getElementById('btn-play').textContent = '▶ 재생';
-    lastTimestamp = null;
+    lastTS = null;
     return;
   }
   requestAnimationFrame(animFrame);
@@ -671,12 +604,12 @@ document.getElementById('btn-play').onclick = () => {
   if (playing) {
     playing = false;
     document.getElementById('btn-play').textContent = '▶ 재생';
-    lastTimestamp = null;
+    lastTS = null;
   } else {
     if (animT >= 1) animT = 0;
     playing = true;
     document.getElementById('btn-play').textContent = '⏸ 정지';
-    lastTimestamp = null;
+    lastTS = null;
     requestAnimationFrame(animFrame);
   }
 };
@@ -684,42 +617,44 @@ document.getElementById('btn-play').onclick = () => {
 document.getElementById('btn-reset').onclick = () => {
   playing = false;
   document.getElementById('btn-play').textContent = '▶ 재생';
-  animT = 0;
-  lastTimestamp = null;
-  drawAll();
+  animT = 0; lastTS = null;
+  draw();
 };
 
-document.getElementById('anim-speed-slider').oninput = (e) => {
+document.getElementById('btn-dir').onclick = () => {
+  turnDir = turnDir === 'right' ? 'left' : 'right';
+  document.getElementById('btn-dir').textContent = turnDir === 'right' ? '우회전 →' : '좌회전 ←';
+  animT = 0; draw();
+};
+
+document.getElementById('anim-speed').oninput = e => {
   animSpeed = parseFloat(e.target.value);
-  document.getElementById('anim-speed-val').textContent = animSpeed.toFixed(1) + 'x';
+  document.getElementById('anim-speed-val').textContent = animSpeed.toFixed(1) + '×';
 };
 
-// ── Angle buttons ─────────────────────────────────────────────────────────────
-document.querySelectorAll('.angle-btn').forEach(btn => {
-  btn.onclick = () => {
-    document.querySelectorAll('.angle-btn').forEach(b => b.classList.remove('active'));
-    btn.classList.add('active');
-    document.getElementById('p-custom-angle').value = btn.dataset.angle;
+// ── Param sliders ─────────────────────────────────────────────────────────────
+const SLIDERS = [
+  ['p-cell','v-cell',1],['p-r','v-r',1],['p-tread','v-tread',1],
+  ['p-bw','v-bw',1],['p-bh','v-bh',1],
+  ['p-vmax','v-vmax',1],['p-alat','v-alat',1],['p-dmin','v-dmin',1],
+];
+SLIDERS.forEach(([sid, vid, dec]) => {
+  const el = document.getElementById(sid);
+  el.oninput = () => {
+    document.getElementById(vid).textContent = parseFloat(el.value).toFixed(dec);
     animT = 0;
-    drawAll();
+    // Keep R ≤ C (soft max) and sync slider max
+    if (sid === 'p-cell') {
+      document.getElementById('p-r').max = parseFloat(el.value);
+    }
+    draw();
   };
 });
-document.getElementById('p-custom-angle').oninput = () => {
-  document.querySelectorAll('.angle-btn').forEach(b => b.classList.remove('active'));
-  animT = 0;
-  drawAll();
-};
 
-// ── Param change listeners ────────────────────────────────────────────────────
-['p-tread','p-wheel-d','p-mass','p-length','p-vmax','p-accel','p-alat','p-radius'].forEach(id => {
-  document.getElementById(id).oninput = () => { animT = 0; drawAll(); };
-});
-document.querySelectorAll('input[name="turn-type"]').forEach(r => {
-  r.onchange = () => { animT = 0; drawAll(); };
-});
+window.addEventListener('resize', () => { resizeCanvas(); draw(); });
 
-// ── Init ──────────────────────────────────────────────────────────────────────
-drawAll();
+resizeCanvas();
+draw();
 </script>
 </body>
 </html>
