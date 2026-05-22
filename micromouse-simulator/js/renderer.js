@@ -131,8 +131,20 @@ class Renderer {
             const alpha = 0.15 + 0.65 * (i / pts.length);
             const seg   = pts[i].seg;
 
-            if (seg && seg.type === 'bezier' && seg.cp) {
-                // Center: draw actual bezier arc (not straight line)
+            if (seg && seg.type === 'arc') {
+                const { center, left, right } = this._arcSample(seg, treadHalf);
+                // Center path
+                ctx.beginPath();
+                center.forEach(([cx,cy], j) =>
+                    j===0 ? ctx.moveTo(pxF(cx),pyF(cy)) : ctx.lineTo(pxF(cx),pyF(cy)));
+                ctx.strokeStyle = `rgba(249,226,175,${alpha})`;
+                ctx.lineWidth = 2;
+                ctx.stroke();
+                if (this.showWheels) {
+                    this._strokeWheelPath(left,  `rgba(243,139,168,${alpha * 0.75})`, 1.5);
+                    this._strokeWheelPath(right, `rgba(137,180,250,${alpha * 0.75})`, 1.5);
+                }
+            } else if (seg && seg.type === 'bezier' && seg.cp) {
                 const cp = seg.cp;
                 ctx.beginPath();
                 ctx.moveTo(pxF(cp[0][0]), pyF(cp[0][1]));
@@ -144,27 +156,21 @@ class Renderer {
                 ctx.strokeStyle = `rgba(249,226,175,${alpha})`;
                 ctx.lineWidth = 2;
                 ctx.stroke();
-
-                // Wheel arcs
                 if (this.showWheels) {
                     const { left, right } = this._wheelPtsBezier(cp, treadHalf);
                     this._strokeWheelPath(left,  `rgba(243,139,168,${alpha * 0.75})`, 1.5);
                     this._strokeWheelPath(right, `rgba(137,180,250,${alpha * 0.75})`, 1.5);
                 }
             } else {
-                // Center: straight line
                 ctx.beginPath();
                 ctx.moveTo(pxF(pts[i-1].x), pyF(pts[i-1].y));
                 ctx.lineTo(pxF(pts[i].x),   pyF(pts[i].y));
                 ctx.strokeStyle = `rgba(249,226,175,${alpha})`;
                 ctx.lineWidth = 2;
                 ctx.stroke();
-
-                // Wheel lines (only for confirmed move segments, not for initial entry)
                 if (this.showWheels && seg && seg.type === 'move') {
                     const dx = pts[i].x - pts[i-1].x, dy = pts[i].y - pts[i-1].y;
                     const len = Math.sqrt(dx*dx + dy*dy) || 1;
-                    // In screen coords (y+ = south): left normal = (dy/len, -dx/len)
                     const lnx = (dy / len) * treadHalf, lny = (-dx / len) * treadHalf;
                     this._strokeWheelPath(
                         [[pts[i-1].x+lnx, pts[i-1].y+lny], [pts[i].x+lnx, pts[i].y+lny]],
@@ -182,14 +188,37 @@ class Renderer {
         const anim = robot._anim;
         if (anim) {
             const last = pts[pts.length - 1];
-            if (anim.type === 'bezier' && anim.cp) {
+            if (anim.type === 'arc') {
+                const curT = easeInOut(anim.progress);
+                // Faint preview of full path
+                const full = this._arcSample(anim, treadHalf, 40, 1);
+                ctx.beginPath();
+                full.center.forEach(([cx,cy],j) =>
+                    j===0 ? ctx.moveTo(pxF(cx),pyF(cy)) : ctx.lineTo(pxF(cx),pyF(cy)));
+                ctx.strokeStyle = 'rgba(249,226,175,0.18)';
+                ctx.setLineDash([3, 4]);
+                ctx.lineWidth = 1.5;
+                ctx.stroke();
+                ctx.setLineDash([]);
+                // Solid traveled portion
+                const traveled = this._arcSample(anim, treadHalf, 40, curT);
+                ctx.beginPath();
+                traveled.center.forEach(([cx,cy],j) =>
+                    j===0 ? ctx.moveTo(pxF(cx),pyF(cy)) : ctx.lineTo(pxF(cx),pyF(cy)));
+                ctx.strokeStyle = 'rgba(249,226,175,0.85)';
+                ctx.lineWidth = 2;
+                ctx.stroke();
+                if (this.showWheels) {
+                    this._strokeWheelPath(traveled.left,  'rgba(243,139,168,0.85)', 1.5);
+                    this._strokeWheelPath(traveled.right, 'rgba(137,180,250,0.85)', 1.5);
+                }
+
+            } else if (anim.type === 'bezier' && anim.cp) {
                 const cp = anim.cp;
                 const [x0,y0] = [pxF(cp[0][0]), pyF(cp[0][1])];
                 const [x1,y1] = [pxF(cp[1][0]), pyF(cp[1][1])];
                 const [x2,y2] = [pxF(cp[2][0]), pyF(cp[2][1])];
                 const [x3,y3] = [pxF(cp[3][0]), pyF(cp[3][1])];
-
-                // Faint preview of full arc
                 ctx.beginPath();
                 ctx.moveTo(x0, y0);
                 ctx.bezierCurveTo(x1, y1, x2, y2, x3, y3);
@@ -198,8 +227,6 @@ class Renderer {
                 ctx.lineWidth = 1.5;
                 ctx.stroke();
                 ctx.setLineDash([]);
-
-                // Solid arc traveled so far (De Casteljau subdivision)
                 const curT = easeInOut(anim.progress);
                 const sub = this._bezierLeft(cp, curT);
                 ctx.beginPath();
@@ -212,8 +239,6 @@ class Renderer {
                 ctx.strokeStyle = 'rgba(249,226,175,0.85)';
                 ctx.lineWidth = 2;
                 ctx.stroke();
-
-                // Live wheel arcs
                 if (this.showWheels) {
                     const { left, right } = this._wheelPtsBezier(cp, treadHalf, 28, curT);
                     this._strokeWheelPath(left,  'rgba(243,139,168,0.85)', 1.5);
@@ -221,7 +246,6 @@ class Renderer {
                 }
 
             } else {
-                // Straight or pivot: line to current visual position
                 ctx.beginPath();
                 ctx.moveTo(pxF(last.x), pyF(last.y));
                 ctx.lineTo(
@@ -231,8 +255,6 @@ class Renderer {
                 ctx.strokeStyle = 'rgba(249,226,175,0.85)';
                 ctx.lineWidth = 2;
                 ctx.stroke();
-
-                // Live wheel lines (move only, not pivot turns)
                 if (this.showWheels && anim.type === 'move') {
                     const dx = anim.toX - anim.fromX, dy = anim.toY - anim.fromY;
                     const len = Math.sqrt(dx*dx + dy*dy) || 1;
@@ -250,6 +272,56 @@ class Renderer {
                 }
             }
         }
+    }
+
+    // Sample arc path (entry straight + arc + exit straight) at N+1 points from pathT=0..maxT
+    // Returns { center, left, right } each as arrays of [cellX, cellY]
+    _arcSample(seg, treadHalf, N = 40, maxT = 1) {
+        const { fromX, fromY, P_in, P_out, arcC, ev, rv,
+                fromAngle, toAngle, sign, R, totalLen } = seg;
+        const ef = (1 - R) / totalLen;
+        const af = (Math.PI * R / 2) / totalLen;
+        const diff = ((toAngle - fromAngle + 540) % 360) - 180;
+        const center = [], left = [], right = [];
+        const arm0x = P_in[0] - arcC[0], arm0y = P_in[1] - arcC[1];
+
+        const sampleAt = (pathT) => {
+            let x, y, hx, hy;
+            if (pathT <= ef) {
+                const frac = ef > 0 ? pathT / ef : 1;
+                x = lerp(fromX, P_in[0], frac);
+                y = lerp(fromY, P_in[1], frac);
+                hx = ev[0]; hy = ev[1];
+            } else if (pathT <= ef + af) {
+                const arcFrac = af > 0 ? (pathT - ef) / af : 1;
+                const phi = arcFrac * Math.PI / 2;
+                const cosPhi = Math.cos(phi), sinPhi = Math.sin(phi);
+                x = arcC[0] + arm0x * cosPhi - arm0y * sign * sinPhi;
+                y = arcC[1] + arm0x * sign * sinPhi + arm0y * cosPhi;
+                // heading: interpolate from ev to rv
+                const visA = fromAngle + diff * arcFrac;
+                const r = (visA - 90) * Math.PI / 180;
+                hx = Math.cos(r); hy = Math.sin(r);
+            } else {
+                const exitFrac = (1 - ef - af) > 0 ? (pathT - ef - af) / (1 - ef - af) : 1;
+                x = lerp(P_out[0], seg.toX, exitFrac);
+                y = lerp(P_out[1], seg.toY, exitFrac);
+                hx = rv[0]; hy = rv[1];
+            }
+            return { x, y, hx, hy };
+        };
+
+        for (let i = 0; i <= N; i++) {
+            const pathT = (i / N) * maxT;
+            const { x, y, hx, hy } = sampleAt(pathT);
+            const len = Math.sqrt(hx*hx + hy*hy) || 1;
+            const tx = hx/len, ty = hy/len;
+            // left normal (screen y-down): (ty, -tx); right: (-ty, tx)
+            center.push([x, y]);
+            left.push( [x + ty  * treadHalf, y - tx * treadHalf]);
+            right.push([x - ty  * treadHalf, y + tx * treadHalf]);
+        }
+        return { center, left, right };
     }
 
     // De Casteljau left-split: sub-bezier from t=0 to t=tEnd

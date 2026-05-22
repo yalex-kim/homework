@@ -144,58 +144,92 @@ class Robot {
     }
 
     // ── Smooth arc turn + advance ─────────────────────────────────────────────
+    // Geometry: entry straight (1-R) + quarter-circle arc + exit straight (1-R)
+    // Destination is diagonal: forward one cell + lateral one cell.
+
+    _arcAnim(fromAngle, toAngle, sign) {
+        const DX = [0, 1, 0, -1], DY = [-1, 0, 1, 0];
+        const DIRS = ['n', 'e', 's', 'w'];
+        const fromDi = ((Math.round(fromAngle / 90)) % 4 + 4) % 4;
+        const toDi   = ((Math.round(toAngle  / 90)) % 4 + 4) % 4;
+
+        // Diagonal destination: forward + lateral
+        const nx = this.x + DX[fromDi] + DX[toDi];
+        const ny = this.y + DY[fromDi] + DY[toDi];
+
+        // Turning cell (one step forward)
+        const tx = this.x + DX[fromDi];
+        const ty = this.y + DY[fromDi];
+
+        // Wall checks: must be able to enter and exit turning cell
+        if (tx < 0 || tx >= this.maze.width  || ty < 0 || ty >= this.maze.height) return null;
+        if (nx < 0 || nx >= this.maze.width  || ny < 0 || ny >= this.maze.height) return null;
+        if (this.maze.hasWall(this.x, this.y, DIRS[fromDi])) return null;
+        if (this.maze.hasWall(tx, ty, DIRS[toDi]))           return null;
+
+        const R = this.hw
+            ? Math.min(this.hw.smoothRadius / this.hw.cellSize, 0.45)
+            : 0.25;
+
+        // Heading unit vectors (screen y-down: angle 0=North→(0,-1), 90=East→(1,0))
+        const vec = (a) => {
+            const r = (a - 90) * Math.PI / 180;
+            return [Math.cos(r), Math.sin(r)];
+        };
+        const ev = vec(fromAngle);
+        const rv = vec(toAngle);
+
+        // Arc geometry
+        const P_in  = [this.x + ev[0]*(1-R), this.y + ev[1]*(1-R)];
+        // Arc center is R to the right (sign=+1) or left (sign=-1) of heading
+        const arcCx = P_in[0] + sign*(-ev[1])*R;
+        const arcCy = P_in[1] + sign*( ev[0])*R;
+        // P_out: rotate arm0 = (P_in - arcC) by 90° (exact)
+        const arm0x = P_in[0] - arcCx, arm0y = P_in[1] - arcCy;
+        const P_out = [arcCx - sign * arm0y, arcCy + sign * arm0x];
+
+        const totalLen = 2*(1-R) + Math.PI*R/2;
+
+        return {
+            type: 'arc',
+            fromX: this.x, fromY: this.y, toX: nx, toY: ny,
+            P_in, P_out, arcC: [arcCx, arcCy],
+            ev, rv, fromAngle, toAngle, sign, R, totalLen,
+            duration: this._smoothDuration,
+            physTime: this.hw ? this.hw.smoothTurnTime() : 0.1,
+        };
+    }
+
+    _finishArcTurn(anim, fromAngle) {
+        this.x = anim.toX; this.y = anim.toY;
+        this.angle = anim.toAngle;
+        this.odometer++;
+        this.path.push({x: this.x, y: this.y, seg: {...anim}});
+        this.maze.explored[this.y][this.x] = true;
+        // Mark turning cell explored too
+        const DX=[0,1,0,-1], DY=[-1,0,1,0];
+        const fromDi = ((Math.round(fromAngle/90))%4+4)%4;
+        const tcell = this.maze.explored[anim.fromY + DY[fromDi]];
+        if (tcell) tcell[anim.fromX + DX[fromDi]] = true;
+    }
 
     async smoothTurnRight() {
         if (this._stopped) throw new StopError();
-        if (this.sensors.right) return false;
-
         const fromAngle = this.angle;
-        const toAngle   = (this.angle + 90) % 360;
-        const latDi = ((Math.round(toAngle / 90)) % 4 + 4) % 4;
-        const DX = [0, 1, 0, -1], DY = [-1, 0, 1, 0];
-        const nx = this.x + DX[latDi];
-        const ny = this.y + DY[latDi];
-
-        const cp = this._bezierCP(this.x, this.y, fromAngle, nx, ny, toAngle);
-        const phys = this.hw ? this.hw.smoothTurnTime() : 0.1;
-
-        await this._startAnim({
-            type: 'bezier', cp,
-            fromAngle, toAngle,
-            duration: this._smoothDuration, physTime: phys,
-        });
-
-        this.x = nx; this.y = ny; this.angle = toAngle;
-        this.odometer++;
-        this.path.push({x: this.x, y: this.y, seg: {type: 'bezier', cp}});
-        this.maze.explored[this.y][this.x] = true;
+        const anim = this._arcAnim(fromAngle, (fromAngle + 90) % 360, +1);
+        if (!anim) return false;
+        await this._startAnim(anim);
+        this._finishArcTurn(anim, fromAngle);
         return true;
     }
 
     async smoothTurnLeft() {
         if (this._stopped) throw new StopError();
-        if (this.sensors.left) return false;
-
         const fromAngle = this.angle;
-        const toAngle   = ((this.angle - 90) + 360) % 360;
-        const latDi = ((Math.round(toAngle / 90)) % 4 + 4) % 4;
-        const DX = [0, 1, 0, -1], DY = [-1, 0, 1, 0];
-        const nx = this.x + DX[latDi];
-        const ny = this.y + DY[latDi];
-
-        const cp = this._bezierCP(this.x, this.y, fromAngle, nx, ny, toAngle);
-        const phys = this.hw ? this.hw.smoothTurnTime() : 0.1;
-
-        await this._startAnim({
-            type: 'bezier', cp,
-            fromAngle, toAngle,
-            duration: this._smoothDuration, physTime: phys,
-        });
-
-        this.x = nx; this.y = ny; this.angle = toAngle;
-        this.odometer++;
-        this.path.push({x: this.x, y: this.y, seg: {type: 'bezier', cp}});
-        this.maze.explored[this.y][this.x] = true;
+        const anim = this._arcAnim(fromAngle, ((fromAngle - 90) + 360) % 360, -1);
+        if (!anim) return false;
+        await this._startAnim(anim);
+        this._finishArcTurn(anim, fromAngle);
         return true;
     }
 
@@ -278,7 +312,6 @@ class Robot {
             const { cp, fromAngle, toAngle } = this._anim;
             [this.visX, this.visY] = bezierPt(cp[0], cp[1], cp[2], cp[3], t);
 
-            // Shortest-path angle interpolation
             const diff = ((toAngle - fromAngle + 540) % 360) - 180;
             this.visAngle = fromAngle + diff * t;
 
@@ -286,6 +319,47 @@ class Robot {
                 ? 4 * this._anim.progress : 4 * (1 - this._anim.progress);
             this._gyroVelocity  = (diff / (this._anim.duration / 1000)) * deriv;
             this._gyroHeading  += this._gyroVelocity * (dt / 1000);
+
+        } else if (this._anim.type === 'arc') {
+            const { fromX, fromY, P_in, P_out, arcC, ev, rv,
+                    fromAngle, toAngle, sign, R, totalLen } = this._anim;
+            const diff = ((toAngle - fromAngle + 540) % 360) - 180;
+            const ef = (1 - R) / totalLen;
+            const af = (Math.PI * R / 2) / totalLen;
+
+            // Use linear t for constant-speed motion through geometry
+            const pathT = t;
+
+            if (pathT <= ef) {
+                const frac = ef > 0 ? pathT / ef : 1;
+                this.visX = lerp(fromX, P_in[0], frac);
+                this.visY = lerp(fromY, P_in[1], frac);
+                this.visAngle = fromAngle;
+                this._gyroVelocity = 0;
+
+            } else if (pathT <= ef + af) {
+                const arcFrac = af > 0 ? (pathT - ef) / af : 1;
+                const phi = arcFrac * Math.PI / 2;
+                // Rotate initial arm (P_in - arcC) clockwise (sign=+1) or CCW (sign=-1)
+                const arm0x = P_in[0] - arcC[0];
+                const arm0y = P_in[1] - arcC[1];
+                const cosPhi = Math.cos(phi), sinPhi = Math.sin(phi);
+                this.visX = arcC[0] + arm0x * cosPhi - arm0y * sign * sinPhi;
+                this.visY = arcC[1] + arm0x * sign * sinPhi + arm0y * cosPhi;
+                this.visAngle = fromAngle + diff * arcFrac;
+
+                const deriv = this._anim.progress < 0.5
+                    ? 4 * this._anim.progress : 4 * (1 - this._anim.progress);
+                this._gyroVelocity  = (diff / (this._anim.duration / 1000)) * deriv;
+                this._gyroHeading  += this._gyroVelocity * (dt / 1000);
+
+            } else {
+                const exitFrac = (1 - ef - af) > 0 ? (pathT - ef - af) / (1 - ef - af) : 1;
+                this.visX = lerp(P_out[0], this._anim.toX, exitFrac);
+                this.visY = lerp(P_out[1], this._anim.toY, exitFrac);
+                this.visAngle = toAngle;
+                this._gyroVelocity = 0;
+            }
         }
 
         if (this._anim.progress >= 1) {
