@@ -30,6 +30,7 @@ class HardwareProfile {
         this.turnType     = opts.turnType     ?? 'pivot'; // 'pivot' | 'smooth'
         this.smoothRadius = opts.smoothRadius ?? 0.045;  // m
         this.cellSize     = opts.cellSize     ?? 0.180;  // m (standard 180 mm)
+        this.treadWidth   = opts.treadWidth   ?? 0.086;  // m (86 mm default)
     }
 
     // Physical time (s) for a straight move of n cells

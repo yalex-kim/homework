@@ -82,6 +82,12 @@ class Simulator {
             e.currentTarget.classList.toggle('active', this.renderer.showFF);
         };
 
+        // Wheel tracks overlay — enabled by default
+        document.getElementById('btn-wheels').onclick = (e) => {
+            this.renderer.showWheels = !this.renderer.showWheels;
+            e.currentTarget.classList.toggle('active', this.renderer.showWheels);
+        };
+
         // Hardware sliders
         this._bindHardwareUI();
 

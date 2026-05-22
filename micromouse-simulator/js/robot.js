@@ -115,7 +115,7 @@ class Robot {
 
             this.x = nx; this.y = ny;
             this.odometer++;
-            this.path.push({x: this.x, y: this.y});
+            this.path.push({x: this.x, y: this.y, seg: {type: 'move'}});
             this.maze.explored[this.y][this.x] = true;
         }
         return true;
@@ -149,22 +149,23 @@ class Robot {
         if (this._stopped) throw new StopError();
         if (this.sensors.right) return false;  // wall blocks turn
 
+        const fromAngle = this.angle;
         const toAngle = (this.angle + 90) % 360;
         const di = Math.round(toAngle / 90) % 4;
         const nx = this.x + [0, 1, 0, -1][di];
         const ny = this.y + [-1, 0, 1, 0][di];
+        const cp = this._bezierCP(this.x, this.y, fromAngle, nx, ny, toAngle);
         const phys = this.hw ? this.hw.smoothTurnTime() : 0.1;
 
         await this._startAnim({
-            type: 'bezier',
-            cp: this._bezierCP(this.x, this.y, this.angle, nx, ny, toAngle),
-            fromAngle: this.angle, toAngle,
+            type: 'bezier', cp,
+            fromAngle, toAngle,
             duration: this._smoothDuration, physTime: phys,
         });
 
         this.x = nx; this.y = ny; this.angle = toAngle;
         this.odometer++;
-        this.path.push({x: this.x, y: this.y});
+        this.path.push({x: this.x, y: this.y, seg: {type: 'bezier', cp}});
         this.maze.explored[this.y][this.x] = true;
         return true;
     }
@@ -173,22 +174,23 @@ class Robot {
         if (this._stopped) throw new StopError();
         if (this.sensors.left) return false;
 
+        const fromAngle = this.angle;
         const toAngle = ((this.angle - 90) + 360) % 360;
         const di = Math.round(toAngle / 90) % 4;
         const nx = this.x + [0, 1, 0, -1][di];
         const ny = this.y + [-1, 0, 1, 0][di];
+        const cp = this._bezierCP(this.x, this.y, fromAngle, nx, ny, toAngle);
         const phys = this.hw ? this.hw.smoothTurnTime() : 0.1;
 
         await this._startAnim({
-            type: 'bezier',
-            cp: this._bezierCP(this.x, this.y, this.angle, nx, ny, toAngle),
-            fromAngle: this.angle, toAngle,
+            type: 'bezier', cp,
+            fromAngle, toAngle,
             duration: this._smoothDuration, physTime: phys,
         });
 
         this.x = nx; this.y = ny; this.angle = toAngle;
         this.odometer++;
-        this.path.push({x: this.x, y: this.y});
+        this.path.push({x: this.x, y: this.y, seg: {type: 'bezier', cp}});
         this.maze.explored[this.y][this.x] = true;
         return true;
     }

@@ -5,7 +5,8 @@ class Renderer {
         this.maze      = maze;
         this.robot     = robot;
         this.floodFill = floodFill;
-        this.showFF    = false;
+        this.showFF     = false;
+        this.showWheels = true;
         this.cellSize  = 30;
         this.padding   = 15;
         this._resize();
@@ -117,35 +118,76 @@ class Renderer {
         const pts = robot.path;
         if (pts.length < 1) return;
 
-        const px = (cx) => padding + cx * cellSize + cellSize / 2;
-        const py = (cy) => padding + cy * cellSize + cellSize / 2;
+        const pxF = (cx) => padding + cx * cellSize + cellSize / 2;
+        const pyF = (cy) => padding + cy * cellSize + cellSize / 2;
 
-        ctx.lineWidth = 2;
+        // Half-tread width in cell units (default 86mm / 180mm / 2 ≈ 0.239)
+        const treadHalf = robot.hw
+            ? (robot.hw.treadWidth / robot.hw.cellSize) / 2
+            : 0.239;
 
-        // Historical path segments
-        if (pts.length >= 2) {
-            for (let i = 1; i < pts.length; i++) {
-                const alpha = 0.15 + 0.65 * (i / pts.length);
+        // ─ Historical segments ────────────────────────────────────────────────
+        for (let i = 1; i < pts.length; i++) {
+            const alpha = 0.15 + 0.65 * (i / pts.length);
+            const seg   = pts[i].seg;
+
+            if (seg && seg.type === 'bezier' && seg.cp) {
+                // Center: draw actual bezier arc (not straight line)
+                const cp = seg.cp;
                 ctx.beginPath();
-                ctx.moveTo(px(pts[i-1].x), py(pts[i-1].y));
-                ctx.lineTo(px(pts[i].x),   py(pts[i].y));
+                ctx.moveTo(pxF(cp[0][0]), pyF(cp[0][1]));
+                ctx.bezierCurveTo(
+                    pxF(cp[1][0]), pyF(cp[1][1]),
+                    pxF(cp[2][0]), pyF(cp[2][1]),
+                    pxF(cp[3][0]), pyF(cp[3][1])
+                );
                 ctx.strokeStyle = `rgba(249,226,175,${alpha})`;
+                ctx.lineWidth = 2;
                 ctx.stroke();
+
+                // Wheel arcs
+                if (this.showWheels) {
+                    const { left, right } = this._wheelPtsBezier(cp, treadHalf);
+                    this._strokeWheelPath(left,  `rgba(243,139,168,${alpha * 0.75})`, 1.5);
+                    this._strokeWheelPath(right, `rgba(137,180,250,${alpha * 0.75})`, 1.5);
+                }
+            } else {
+                // Center: straight line
+                ctx.beginPath();
+                ctx.moveTo(pxF(pts[i-1].x), pyF(pts[i-1].y));
+                ctx.lineTo(pxF(pts[i].x),   pyF(pts[i].y));
+                ctx.strokeStyle = `rgba(249,226,175,${alpha})`;
+                ctx.lineWidth = 2;
+                ctx.stroke();
+
+                // Wheel lines (only for confirmed move segments, not for initial entry)
+                if (this.showWheels && seg && seg.type === 'move') {
+                    const dx = pts[i].x - pts[i-1].x, dy = pts[i].y - pts[i-1].y;
+                    const len = Math.sqrt(dx*dx + dy*dy) || 1;
+                    // In screen coords (y+ = south): left normal = (dy/len, -dx/len)
+                    const lnx = (dy / len) * treadHalf, lny = (-dx / len) * treadHalf;
+                    this._strokeWheelPath(
+                        [[pts[i-1].x+lnx, pts[i-1].y+lny], [pts[i].x+lnx, pts[i].y+lny]],
+                        `rgba(243,139,168,${alpha * 0.75})`, 1.5
+                    );
+                    this._strokeWheelPath(
+                        [[pts[i-1].x-lnx, pts[i-1].y-lny], [pts[i].x-lnx, pts[i].y-lny]],
+                        `rgba(137,180,250,${alpha * 0.75})`, 1.5
+                    );
+                }
             }
         }
 
-        // Current animation segment
+        // ─ Current animation segment ──────────────────────────────────────────
         const anim = robot._anim;
         if (anim) {
             const last = pts[pts.length - 1];
             if (anim.type === 'bezier' && anim.cp) {
-                // Draw the full bezier preview (dashed), then the traveled portion (solid)
                 const cp = anim.cp;
-                const tp = (gx, gy) => [px(gx), py(gy)];
-                const [x0,y0] = tp(cp[0][0], cp[0][1]);
-                const [x1,y1] = tp(cp[1][0], cp[1][1]);
-                const [x2,y2] = tp(cp[2][0], cp[2][1]);
-                const [x3,y3] = tp(cp[3][0], cp[3][1]);
+                const [x0,y0] = [pxF(cp[0][0]), pyF(cp[0][1])];
+                const [x1,y1] = [pxF(cp[1][0]), pyF(cp[1][1])];
+                const [x2,y2] = [pxF(cp[2][0]), pyF(cp[2][1])];
+                const [x3,y3] = [pxF(cp[3][0]), pyF(cp[3][1])];
 
                 // Faint preview of full arc
                 ctx.beginPath();
@@ -157,7 +199,7 @@ class Renderer {
                 ctx.stroke();
                 ctx.setLineDash([]);
 
-                // Solid arc traveled so far (to visual position)
+                // Solid arc traveled so far
                 ctx.beginPath();
                 ctx.moveTo(x0, y0);
                 ctx.bezierCurveTo(x1, y1, x2, y2,
@@ -167,10 +209,18 @@ class Renderer {
                 ctx.lineWidth = 2;
                 ctx.stroke();
 
+                // Live wheel arcs
+                if (this.showWheels) {
+                    const curT = easeInOut(anim.progress);
+                    const { left, right } = this._wheelPtsBezier(cp, treadHalf, 28, curT);
+                    this._strokeWheelPath(left,  'rgba(243,139,168,0.85)', 1.5);
+                    this._strokeWheelPath(right, 'rgba(137,180,250,0.85)', 1.5);
+                }
+
             } else {
                 // Straight or pivot: line to current visual position
                 ctx.beginPath();
-                ctx.moveTo(px(last.x), py(last.y));
+                ctx.moveTo(pxF(last.x), pyF(last.y));
                 ctx.lineTo(
                     padding + robot.visX * cellSize + cellSize/2,
                     padding + robot.visY * cellSize + cellSize/2
@@ -178,8 +228,67 @@ class Renderer {
                 ctx.strokeStyle = 'rgba(249,226,175,0.85)';
                 ctx.lineWidth = 2;
                 ctx.stroke();
+
+                // Live wheel lines (move only, not pivot turns)
+                if (this.showWheels && anim.type === 'move') {
+                    const dx = anim.toX - anim.fromX, dy = anim.toY - anim.fromY;
+                    const len = Math.sqrt(dx*dx + dy*dy) || 1;
+                    const lnx = (dy / len) * treadHalf, lny = (-dx / len) * treadHalf;
+                    const fx = anim.fromX, fy = anim.fromY;
+                    const tx = robot.visX, ty = robot.visY;
+                    this._strokeWheelPath(
+                        [[fx+lnx, fy+lny], [tx+lnx, ty+lny]],
+                        'rgba(243,139,168,0.85)', 1.5
+                    );
+                    this._strokeWheelPath(
+                        [[fx-lnx, fy-lny], [tx-lnx, ty-lny]],
+                        'rgba(137,180,250,0.85)', 1.5
+                    );
+                }
             }
         }
+    }
+
+    // Bezier tangent vector at parameter t (in cell coords)
+    _bezierTangent(cp, t) {
+        const mt = 1 - t;
+        return [
+            3*(mt*mt*(cp[1][0]-cp[0][0]) + 2*mt*t*(cp[2][0]-cp[1][0]) + t*t*(cp[3][0]-cp[2][0])),
+            3*(mt*mt*(cp[1][1]-cp[0][1]) + 2*mt*t*(cp[2][1]-cp[1][1]) + t*t*(cp[3][1]-cp[2][1])),
+        ];
+    }
+
+    // Sample left/right wheel positions along bezier from t=0 to t=maxT
+    // In screen coords (y+ = south): left normal = (ty, -tx), right = (-ty, tx)
+    _wheelPtsBezier(cp, treadHalf, N=24, maxT=1) {
+        const left = [], right = [];
+        for (let i = 0; i <= N; i++) {
+            const t    = (i / N) * maxT;
+            const pt   = bezierPt(cp[0], cp[1], cp[2], cp[3], t);
+            const tang = this._bezierTangent(cp, t);
+            const tlen = Math.sqrt(tang[0]*tang[0] + tang[1]*tang[1]) || 1;
+            const tx = tang[0]/tlen, ty = tang[1]/tlen;
+            const lnx = ty * treadHalf, lny = -tx * treadHalf;
+            left.push([pt[0]+lnx, pt[1]+lny]);
+            right.push([pt[0]-lnx, pt[1]-lny]);
+        }
+        return { left, right };
+    }
+
+    // Draw an array of [cellX, cellY] points as a polyline
+    _strokeWheelPath(pts, color, width) {
+        const { ctx, cellSize, padding } = this;
+        const pxF = (cx) => padding + cx * cellSize + cellSize/2;
+        const pyF = (cy) => padding + cy * cellSize + cellSize/2;
+        ctx.beginPath();
+        for (let i = 0; i < pts.length; i++) {
+            i === 0
+                ? ctx.moveTo(pxF(pts[i][0]), pyF(pts[i][1]))
+                : ctx.lineTo(pxF(pts[i][0]), pyF(pts[i][1]));
+        }
+        ctx.strokeStyle = color;
+        ctx.lineWidth   = width;
+        ctx.stroke();
     }
 
     _drawWalls() {
