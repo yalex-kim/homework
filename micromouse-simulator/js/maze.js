@@ -52,6 +52,16 @@ class Maze {
         }
 
         this._openGoalArea();
+        this._applyFixedWalls();
+    }
+
+    // Fixed wall constraints applied after every generation
+    _applyFixedWalls() {
+        // Cell (1,1): east wall always blocked, north wall always open
+        this.walls[1][1].e = true;
+        this.walls[1][2].w = true;   // mirror on east neighbor
+        this.walls[1][1].n = false;
+        this.walls[0][1].s = false;  // mirror on north neighbor
     }
 
     _openGoalArea() {
