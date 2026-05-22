@@ -27,7 +27,7 @@ class HardwareProfile {
         this.decel        = opts.decel        ?? 3.0;    // m/s²
         this.maxOmega     = opts.maxOmega     ?? 360;    // deg/s  (pivot turn)
         this.alphaOmega   = opts.alphaOmega   ?? 720;    // deg/s² (pivot angular accel)
-        this.turnType     = opts.turnType     ?? 'pivot'; // 'pivot' | 'smooth'
+        this.turnType     = opts.turnType     ?? 'smooth'; // 'pivot' | 'smooth'
         this.smoothRadius = opts.smoothRadius ?? 0.045;  // m
         this.cellSize     = opts.cellSize     ?? 0.180;  // m (standard 180 mm)
         this.treadWidth   = opts.treadWidth   ?? 0.086;  // m (86 mm default)
