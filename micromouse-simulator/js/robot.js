@@ -147,7 +147,7 @@ class Robot {
 
     async smoothTurnRight() {
         if (this._stopped) throw new StopError();
-        if (this.sensors.front || this.sensors.right) return false;
+        if (this.sensors.right) return false;  // lateral wall blocks arc exit
 
         const fromAngle = this.angle;
         const toAngle   = (this.angle + 90) % 360;
@@ -177,7 +177,7 @@ class Robot {
 
     async smoothTurnLeft() {
         if (this._stopped) throw new StopError();
-        if (this.sensors.front || this.sensors.left) return false;
+        if (this.sensors.left) return false;   // lateral wall blocks arc exit
 
         const fromAngle = this.angle;
         const toAngle   = ((this.angle - 90) + 360) % 360;
@@ -212,8 +212,15 @@ class Robot {
 
         if (this.hw && this.hw.turnType === 'smooth') {
             if (diff === 0)   return await this.moveForward();
-            if (diff === 90)  return await this.smoothTurnRight();
-            if (diff === 270) return await this.smoothTurnLeft();
+            if (diff === 90)  {
+                if (await this.smoothTurnRight()) return true;
+                // wall blocks smooth arc → pivot fallback
+                await this.turnRight(); return await this.moveForward();
+            }
+            if (diff === 270) {
+                if (await this.smoothTurnLeft()) return true;
+                await this.turnLeft();  return await this.moveForward();
+            }
             // 180°: no smooth U-turn — fall back to pivot + move
             await this.turnRight(180);
             return await this.moveForward();
