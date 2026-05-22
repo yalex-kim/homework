@@ -1,0 +1,725 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<title>턴 시뮬레이터 — 마이크로마우스</title>
+<style>
+:root {
+  --bg:#0d0d1a; --surface:#1e1e2e; --surface2:#2a2a3e;
+  --border:#383851; --text:#cdd6f4; --muted:#6c7086;
+  --accent:#89b4fa; --success:#a6e3a1; --warn:#f9e2af; --error:#f38ba8;
+}
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0;}
+html,body{height:100%;background:var(--bg);color:var(--text);font-family:'Segoe UI',system-ui,sans-serif;font-size:13px;overflow:hidden;}
+#app{display:flex;flex-direction:column;height:100vh;}
+
+/* toolbar */
+#toolbar{display:flex;align-items:center;gap:12px;padding:7px 14px;background:var(--surface);border-bottom:1px solid var(--border);flex-shrink:0;}
+#toolbar h1{font-size:13px;font-weight:700;color:var(--accent);white-space:nowrap;}
+#toolbar a{color:var(--muted);font-size:11px;text-decoration:none;border:1px solid var(--border);padding:3px 9px;border-radius:4px;}
+#toolbar a:hover{color:var(--text);}
+button{border:none;cursor:pointer;border-radius:5px;font-size:12px;padding:5px 11px;font-weight:500;transition:filter .12s,transform .1s;}
+button:hover{filter:brightness(1.15);}
+button:active{transform:scale(.97);}
+.btn-primary{background:var(--accent);color:#1e1e2e;font-weight:700;}
+.btn-secondary{background:var(--surface2);color:var(--text);border:1px solid var(--border);}
+.ctrl-row{display:flex;align-items:center;gap:6px;}
+label.sl{font-size:11px;color:var(--muted);white-space:nowrap;}
+#anim-speed-slider{width:70px;accent-color:var(--accent);}
+
+/* main layout */
+#main{display:flex;flex:1;overflow:hidden;}
+
+/* param panel */
+#params{width:220px;flex-shrink:0;background:var(--surface);border-right:1px solid var(--border);overflow-y:auto;padding:10px;}
+.section-title{font-size:10px;text-transform:uppercase;letter-spacing:.5px;color:var(--muted);font-weight:700;margin:10px 0 6px;}
+.param-row{display:flex;align-items:center;justify-content:space-between;margin-bottom:5px;gap:6px;}
+.param-row label{font-size:11px;color:var(--text);flex:1;}
+.param-row input[type=number]{width:72px;background:var(--surface2);color:var(--text);border:1px solid var(--border);border-radius:4px;padding:3px 5px;font-size:11px;text-align:right;}
+.param-row input[type=number]:focus{outline:none;border-color:var(--accent);}
+.param-row em{font-size:10px;color:var(--muted);font-style:normal;min-width:26px;}
+
+.radio-group{display:flex;flex-direction:column;gap:4px;margin-bottom:6px;}
+.radio-group label{display:flex;align-items:center;gap:5px;font-size:11px;cursor:pointer;}
+.radio-group input{accent-color:var(--accent);}
+
+.angle-buttons{display:flex;gap:4px;flex-wrap:wrap;margin-bottom:8px;}
+.angle-btn{padding:4px 8px;font-size:11px;background:var(--surface2);color:var(--text);border:1px solid var(--border);border-radius:4px;}
+.angle-btn.active{background:var(--accent);color:#1e1e2e;border-color:var(--accent);font-weight:700;}
+
+#stats-box{background:var(--surface2);border:1px solid var(--border);border-radius:5px;padding:7px 9px;margin-top:8px;}
+.stat-row{display:flex;justify-content:space-between;font-size:11px;margin-bottom:3px;}
+.stat-row .sk{color:var(--muted);}
+.stat-row .sv{color:var(--accent);font-family:monospace;}
+
+/* canvas area */
+#canvas-area{flex:1;display:flex;flex-direction:column;overflow:hidden;padding:10px;gap:8px;}
+#main-canvas{background:var(--bg);border:1px solid var(--border);border-radius:5px;flex-shrink:0;display:block;}
+#graphs{display:flex;gap:8px;flex-shrink:0;}
+#graphs canvas{background:var(--surface);border:1px solid var(--border);border-radius:5px;flex:1;}
+</style>
+</head>
+<body>
+<div id="app">
+
+<header id="toolbar">
+  <h1>⚙️ 턴 시뮬레이터</h1>
+  <a href="index.html">← 메인</a>
+  <div class="ctrl-row">
+    <button id="btn-play" class="btn-primary">▶ 재생</button>
+    <button id="btn-reset" class="btn-secondary">↺ 리셋</button>
+  </div>
+  <div class="ctrl-row">
+    <label class="sl">재생속도</label>
+    <input type="range" id="anim-speed-slider" min="0.1" max="5" step="0.1" value="1">
+    <span id="anim-speed-val" style="font-size:11px;color:var(--text);min-width:24px;">1.0x</span>
+  </div>
+</header>
+
+<div id="main">
+  <div id="params">
+
+    <div class="section-title">로봇 물리 파라미터</div>
+    <div class="param-row"><label>Tread Width</label><input type="number" id="p-tread" value="86" min="10" max="200" step="1"><em>mm</em></div>
+    <div class="param-row"><label>바퀴 직경</label><input type="number" id="p-wheel-d" value="32" min="5" max="100" step="1"><em>mm</em></div>
+    <div class="param-row"><label>로봇 무게</label><input type="number" id="p-mass" value="0.085" min="0.01" max="1" step="0.005"><em>kg</em></div>
+    <div class="param-row"><label>로봇 길이</label><input type="number" id="p-length" value="90" min="20" max="200" step="1"><em>mm</em></div>
+
+    <div class="section-title">속도 파라미터</div>
+    <div class="param-row"><label>최대 속도</label><input type="number" id="p-vmax" value="1.0" min="0.1" max="5" step="0.1"><em>m/s</em></div>
+    <div class="param-row"><label>가속도</label><input type="number" id="p-accel" value="5.0" min="0.5" max="30" step="0.5"><em>m/s²</em></div>
+    <div class="param-row"><label>최대 횡가속</label><input type="number" id="p-alat" value="4.0" min="0.5" max="20" step="0.5"><em>m/s²</em></div>
+    <div class="param-row"><label>턴 반경 R</label><input type="number" id="p-radius" value="100" min="0" max="500" step="5"><em>mm</em></div>
+
+    <div class="section-title">턴 타입</div>
+    <div class="radio-group">
+      <label><input type="radio" name="turn-type" value="arc" checked> Arc (원호)</label>
+      <label><input type="radio" name="turn-type" value="pivot"> Pivot (제자리)</label>
+    </div>
+
+    <div class="section-title">턴 각도</div>
+    <div class="angle-buttons">
+      <button class="angle-btn" data-angle="45">45°</button>
+      <button class="angle-btn active" data-angle="90">90°</button>
+      <button class="angle-btn" data-angle="135">135°</button>
+      <button class="angle-btn" data-angle="180">180°</button>
+    </div>
+    <div class="param-row"><label>커스텀 각도</label><input type="number" id="p-custom-angle" value="90" min="1" max="360" step="1"><em>°</em></div>
+
+    <div id="stats-box">
+      <div class="stat-row"><span class="sk">v_turn</span><span class="sv" id="sv-vturn">—</span></div>
+      <div class="stat-row"><span class="sk">v_outer</span><span class="sv" id="sv-vouter">—</span></div>
+      <div class="stat-row"><span class="sk">v_inner</span><span class="sv" id="sv-vinner">—</span></div>
+      <div class="stat-row"><span class="sk">ω</span><span class="sv" id="sv-omega">—</span></div>
+      <div class="stat-row"><span class="sk">F_c / g</span><span class="sv" id="sv-fg">—</span></div>
+      <div class="stat-row"><span class="sk">턴 시간</span><span class="sv" id="sv-ttime">—</span></div>
+      <div class="stat-row"><span class="sk">총 거리</span><span class="sv" id="sv-dist">—</span></div>
+    </div>
+
+  </div>
+
+  <div id="canvas-area">
+    <canvas id="main-canvas"></canvas>
+    <div id="graphs">
+      <canvas id="g-speed" title="속도"></canvas>
+      <canvas id="g-gforce" title="원심가속도"></canvas>
+      <canvas id="g-omega" title="각속도"></canvas>
+    </div>
+  </div>
+</div>
+</div>
+
+<script>
+// ── Params ────────────────────────────────────────────────────────────────────
+const P = {
+  get tread()   { return parseFloat(document.getElementById('p-tread').value) / 1000; },
+  get wheelD()  { return parseFloat(document.getElementById('p-wheel-d').value) / 1000; },
+  get mass()    { return parseFloat(document.getElementById('p-mass').value); },
+  get length()  { return parseFloat(document.getElementById('p-length').value) / 1000; },
+  get vMax()    { return parseFloat(document.getElementById('p-vmax').value); },
+  get accel()   { return parseFloat(document.getElementById('p-accel').value); },
+  get aLat()    { return parseFloat(document.getElementById('p-alat').value); },
+  get radius()  { return parseFloat(document.getElementById('p-radius').value) / 1000; },
+  get turnType(){ return document.querySelector('input[name="turn-type"]:checked').value; },
+  get angle()   { return parseFloat(document.getElementById('p-custom-angle').value) * Math.PI / 180; },
+};
+
+// ── Trajectory computation ────────────────────────────────────────────────────
+function computeTraj() {
+  const { tread: L, mass: m, vMax, accel, aLat, radius: R, turnType, angle: totalPhi } = P;
+  const isPivot = turnType === 'pivot';
+
+  let vTurn, omega, vOuter, vInner;
+
+  if (isPivot) {
+    // pivot: constant omega, v_center ≈ 0, each wheel has speed v_pivot = omega * L/2
+    vTurn  = 0;
+    omega  = 2 * vMax / L;     // set by vMax applied to each wheel
+    vOuter = vMax;
+    vInner = -vMax;
+  } else {
+    if (R <= 0) { vTurn = 0; omega = 0; vOuter = 0; vInner = 0; }
+    else {
+      vTurn  = Math.min(vMax, Math.sqrt(aLat * R));
+      omega  = vTurn / R;
+      vOuter = omega * (R + L / 2);
+      vInner = omega * (R - L / 2);
+    }
+  }
+
+  const STRAIGHT = 0.09; // 90mm approach/exit
+
+  // Build trajectory sample points: (phi, x, y, angle, vCenter, vL, vR, aCent)
+  const N = 300;
+  const pts = [];
+
+  function arcPt(phi) {
+    // right turn: ICR at (R, 0) in local frame (robot starts at origin, facing +y)
+    if (isPivot) {
+      const halfL = L / 2;
+      return {
+        x:   0, y: 0,      // pivot: robot center stays put
+        xL: -halfL * Math.sin(phi), yL:  halfL * Math.cos(phi),
+        xR:  halfL * Math.sin(phi), yR: -halfL * Math.cos(phi),
+        angle: phi,
+        aCent: 0,
+      };
+    } else {
+      const cx = R * (1 - Math.cos(phi));
+      const cy = R * Math.sin(phi);
+      const xL = R - (R + L/2) * Math.cos(phi);
+      const yL = (R + L/2) * Math.sin(phi);
+      const xR = R - (R - L/2) * Math.cos(phi);
+      const yR = (R - L/2) * Math.sin(phi);
+      return {
+        x: cx, y: cy, xL, yL, xR, yR,
+        angle: phi,
+        aCent: vTurn > 0 ? vTurn * vTurn / R : 0,
+      };
+    }
+  }
+
+  for (let i = 0; i <= N; i++) {
+    const phi = totalPhi * i / N;
+    const pt  = arcPt(phi);
+    pt.phi = phi;
+    pt.t   = i / N;
+    pts.push(pt);
+  }
+
+  // Straight sections (approach & exit) in world coords
+  // Entry: robot at origin facing +y (north). Straight N points each.
+  const NS = 40;
+  const entry = [], exit_ = [];
+  for (let i = NS; i >= 0; i--) {
+    const d = STRAIGHT * i / NS;
+    entry.push({ x: 0, y: -d, angle: 0, isEntry: true, frac: 1 - i/NS });
+  }
+
+  const endPt = pts[pts.length - 1];
+  const cosA = Math.cos(totalPhi), sinA = Math.sin(totalPhi);
+
+  for (let i = 0; i <= NS; i++) {
+    const d = STRAIGHT * i / NS;
+    // after turn, robot heading is rotated by totalPhi (right turn = clockwise = angle increase)
+    // post-turn direction: was (0,1) → rotated right by totalPhi → (sinA, cosA)
+    exit_.push({
+      x: endPt.x + sinA * d,
+      y: endPt.y + cosA * d,
+      angle: totalPhi, isExit: true, frac: i/NS
+    });
+  }
+
+  const turnArcLen = isPivot ? (L/2 * totalPhi) : (R * totalPhi);
+  const turnTime   = isPivot ? (totalPhi / omega) : (vTurn > 0 ? turnArcLen / vTurn : 0);
+  const totalDist  = 2 * STRAIGHT + turnArcLen;
+
+  return { pts, entry, exit: exit_, vTurn, omega, vOuter, vInner, L, m,
+           turnArcLen, turnTime, totalDist, STRAIGHT, totalPhi, isPivot };
+}
+
+// ── Canvas sizing ─────────────────────────────────────────────────────────────
+const mainCanvas = document.getElementById('main-canvas');
+const gSpeed     = document.getElementById('g-speed');
+const gGforce    = document.getElementById('g-gforce');
+const gOmega     = document.getElementById('g-omega');
+
+function sizeCanvases() {
+  const area = document.getElementById('canvas-area');
+  const w    = area.clientWidth - 20;
+  const gh   = 110;
+  const mh   = area.clientHeight - gh - 8 - 20 - 8;
+
+  mainCanvas.width  = w;
+  mainCanvas.height = Math.max(mh, 200);
+  gSpeed.width = gGforce.width = gOmega.width = Math.floor(w / 3) - 6;
+  gSpeed.height = gGforce.height = gOmega.height = gh;
+}
+sizeCanvases();
+window.addEventListener('resize', () => { sizeCanvases(); drawAll(); });
+
+// ── Draw main canvas ──────────────────────────────────────────────────────────
+let animT = 0;   // 0..1 animation progress
+let playing = false;
+let animSpeed = 1.0;
+let lastRAF = null;
+
+function worldToCanvas(traj, wx, wy, cw, ch) {
+  // Fit bounding box of entire trajectory into canvas
+  return worldToCanvasS(traj, wx, wy, cw, ch);
+}
+
+function fitTransform(traj) {
+  const allX = [], allY = [];
+  const add = (p) => { allX.push(p.x); allY.push(p.y); };
+  traj.entry.forEach(add);
+  traj.pts.forEach(add);
+  traj.exit.forEach(add);
+  // wheel trajectories
+  traj.pts.forEach(p => {
+    if (p.xL !== undefined) { allX.push(p.xL, p.xR); allY.push(p.yL, p.yR); }
+  });
+
+  let minX = Math.min(...allX), maxX = Math.max(...allX);
+  let minY = Math.min(...allY), maxY = Math.max(...allY);
+  const pad = 0.04;
+  minX -= pad; maxX += pad; minY -= pad; maxY += pad;
+
+  const cw = mainCanvas.width, ch = mainCanvas.height;
+  const sx = cw / (maxX - minX || 1);
+  const sy = ch / (maxY - minY || 1);
+  const scale = Math.min(sx, sy) * 0.88;
+  const offX = cw/2 - scale*(minX+maxX)/2;
+  const offY = ch/2 + scale*(minY+maxY)/2;  // flip y
+
+  return { scale, offX, offY };
+}
+
+function toCanvas(tf, wx, wy) {
+  return [ tf.offX + tf.scale * wx, tf.offY - tf.scale * wy ];
+}
+
+function drawRobotGhost(ctx, tf, x, y, angle, L, rLen, alpha) {
+  const [cx, cy] = toCanvas(tf, x, y);
+  ctx.save();
+  ctx.translate(cx, cy);
+  ctx.rotate(angle);  // angle = phi (right-turn clockwise in physics = negative in canvas y-flip)
+  const sw = tf.scale * L, sh = tf.scale * rLen;
+  ctx.globalAlpha = alpha;
+  ctx.strokeStyle = '#cdd6f4';
+  ctx.lineWidth = 1.5;
+  ctx.strokeRect(-sw/2, -sh/2, sw, sh);
+  // direction indicator
+  ctx.beginPath();
+  ctx.moveTo(0, -sh/2);
+  ctx.lineTo(0, -sh/2 - tf.scale*0.015);
+  ctx.strokeStyle = '#89b4fa';
+  ctx.lineWidth = 2;
+  ctx.stroke();
+  ctx.globalAlpha = 1;
+  ctx.restore();
+}
+
+function drawArrow(ctx, x0, y0, x1, y1, color, width=2) {
+  const dx = x1-x0, dy = y1-y0;
+  const len = Math.sqrt(dx*dx+dy*dy);
+  if (len < 2) return;
+  ctx.beginPath();
+  ctx.moveTo(x0, y0);
+  ctx.lineTo(x1, y1);
+  ctx.strokeStyle = color;
+  ctx.lineWidth = width;
+  ctx.stroke();
+  const angle = Math.atan2(dy, dx);
+  const hs = Math.min(len*0.35, 10);
+  ctx.beginPath();
+  ctx.moveTo(x1, y1);
+  ctx.lineTo(x1 - hs*Math.cos(angle-0.4), y1 - hs*Math.sin(angle-0.4));
+  ctx.lineTo(x1 - hs*Math.cos(angle+0.4), y1 - hs*Math.sin(angle+0.4));
+  ctx.closePath();
+  ctx.fillStyle = color;
+  ctx.fill();
+}
+
+function drawMain(traj, t) {
+  const ctx = mainCanvas.getContext('2d');
+  const cw = mainCanvas.width, ch = mainCanvas.height;
+  ctx.fillStyle = '#0d0d1a';
+  ctx.fillRect(0, 0, cw, ch);
+
+  const tf = fitTransform(traj);
+
+  // Grid (metric)
+  ctx.strokeStyle = 'rgba(56,56,81,0.5)';
+  ctx.lineWidth = 1;
+  const gridStep = 0.05; // 50mm
+  // estimate grid range
+  const allPts = [...traj.entry, ...traj.pts, ...traj.exit];
+  const xs = allPts.map(p=>p.x), ys = allPts.map(p=>p.y);
+  const gx0 = Math.floor(Math.min(...xs)/gridStep)*gridStep - gridStep;
+  const gx1 = Math.ceil(Math.max(...xs)/gridStep)*gridStep + gridStep;
+  const gy0 = Math.floor(Math.min(...ys)/gridStep)*gridStep - gridStep;
+  const gy1 = Math.ceil(Math.max(...ys)/gridStep)*gridStep + gridStep;
+  for (let gx = gx0; gx <= gx1; gx += gridStep) {
+    const [cx0] = toCanvas(tf, gx, gy0); const [cx1] = toCanvas(tf, gx, gy1);
+    const [,cy0] = toCanvas(tf, gx, gy0); const [,cy1] = toCanvas(tf, gx, gy1);
+    ctx.beginPath(); ctx.moveTo(cx0, cy0); ctx.lineTo(cx1, cy1); ctx.stroke();
+  }
+  for (let gy = gy0; gy <= gy1; gy += gridStep) {
+    const [cx0,cy0] = toCanvas(tf, gx0, gy);
+    const [cx1,cy1] = toCanvas(tf, gx1, gy);
+    ctx.beginPath(); ctx.moveTo(cx0, cy0); ctx.lineTo(cx1, cy1); ctx.stroke();
+  }
+
+  // Entry straight
+  ctx.beginPath();
+  ctx.strokeStyle = 'rgba(137,180,250,0.3)';
+  ctx.lineWidth = 1.5;
+  ctx.setLineDash([4, 4]);
+  for (let i = 0; i < traj.entry.length; i++) {
+    const [cx, cy] = toCanvas(tf, traj.entry[i].x, traj.entry[i].y);
+    i === 0 ? ctx.moveTo(cx, cy) : ctx.lineTo(cx, cy);
+  }
+  ctx.stroke();
+
+  // Exit straight
+  ctx.beginPath();
+  ctx.strokeStyle = 'rgba(137,180,250,0.3)';
+  for (let i = 0; i < traj.exit.length; i++) {
+    const [cx, cy] = toCanvas(tf, traj.exit[i].x, traj.exit[i].y);
+    i === 0 ? ctx.moveTo(cx, cy) : ctx.lineTo(cx, cy);
+  }
+  ctx.stroke();
+  ctx.setLineDash([]);
+
+  // Wheel trajectories (full) — shown for both arc and pivot
+  // Left wheel
+  ctx.beginPath();
+  ctx.strokeStyle = 'rgba(243,139,168,0.35)';
+  ctx.lineWidth = 1.5;
+  for (let i = 0; i < traj.pts.length; i++) {
+    const p = traj.pts[i];
+    const [cx, cy] = toCanvas(tf, p.xL, p.yL);
+    i === 0 ? ctx.moveTo(cx, cy) : ctx.lineTo(cx, cy);
+  }
+  ctx.stroke();
+
+  // Right wheel
+  ctx.beginPath();
+  ctx.strokeStyle = 'rgba(137,180,250,0.35)';
+  ctx.lineWidth = 1.5;
+  for (let i = 0; i < traj.pts.length; i++) {
+    const p = traj.pts[i];
+    const [cx, cy] = toCanvas(tf, p.xR, p.yR);
+    i === 0 ? ctx.moveTo(cx, cy) : ctx.lineTo(cx, cy);
+  }
+  ctx.stroke();
+
+  // Center trajectory full (dim)
+  ctx.beginPath();
+  ctx.strokeStyle = 'rgba(249,226,175,0.25)';
+  ctx.lineWidth = 2;
+  for (let i = 0; i < traj.pts.length; i++) {
+    const [cx, cy] = toCanvas(tf, traj.pts[i].x, traj.pts[i].y);
+    i === 0 ? ctx.moveTo(cx, cy) : ctx.lineTo(cx, cy);
+  }
+  ctx.stroke();
+
+  // Traveled portion
+  const cutIdx = Math.floor(t * (traj.pts.length - 1));
+  if (cutIdx > 0) {
+    ctx.beginPath();
+    ctx.strokeStyle = '#f9e2af';
+    ctx.lineWidth = 2.5;
+    for (let i = 0; i <= cutIdx; i++) {
+      const [cx, cy] = toCanvas(tf, traj.pts[i].x, traj.pts[i].y);
+      i === 0 ? ctx.moveTo(cx, cy) : ctx.lineTo(cx, cy);
+    }
+    ctx.stroke();
+
+    if (cutIdx > 0) {
+      // Left traveled
+      ctx.beginPath(); ctx.strokeStyle = '#f38ba8'; ctx.lineWidth = 2;
+      for (let i = 0; i <= cutIdx; i++) {
+        const [cx, cy] = toCanvas(tf, traj.pts[i].xL, traj.pts[i].yL);
+        i === 0 ? ctx.moveTo(cx, cy) : ctx.lineTo(cx, cy);
+      }
+      ctx.stroke();
+      // Right traveled
+      ctx.beginPath(); ctx.strokeStyle = '#89b4fa'; ctx.lineWidth = 2;
+      for (let i = 0; i <= cutIdx; i++) {
+        const [cx, cy] = toCanvas(tf, traj.pts[i].xR, traj.pts[i].yR);
+        i === 0 ? ctx.moveTo(cx, cy) : ctx.lineTo(cx, cy);
+      }
+      ctx.stroke();
+    }
+  }
+
+  // Ghost robots at 0, 0.5, 1
+  for (const frac of [0, 0.5, 1]) {
+    const idx = Math.floor(frac * (traj.pts.length - 1));
+    const p   = traj.pts[idx];
+    const a   = traj.isPivot ? p.phi : p.phi; // clockwise in our coord system
+    drawRobotGhost(ctx, tf, p.x, p.y, a, traj.L, P.length / 1000, frac === 0 || frac === 1 ? 0.25 : 0.18);
+  }
+
+  // Current robot
+  const curPt = traj.pts[cutIdx] || traj.pts[0];
+  drawRobotGhost(ctx, tf, curPt.x, curPt.y, curPt.phi, traj.L, P.length / 1000, 0.85);
+
+  // ICR marker
+  {
+    const icrX = traj.isPivot ? 0 : P.radius / 1000;
+    const icrY = 0;
+    const [icx, icy] = toCanvas(tf, icrX, icrY);
+    ctx.beginPath();
+    ctx.arc(icx, icy, 5, 0, Math.PI*2);
+    ctx.strokeStyle = '#a6e3a1';
+    ctx.lineWidth = 1.5;
+    ctx.stroke();
+    ctx.beginPath();
+    ctx.moveTo(icx-8, icy); ctx.lineTo(icx+8, icy);
+    ctx.moveTo(icx, icy-8); ctx.lineTo(icx, icy+8);
+    ctx.stroke();
+    ctx.fillStyle = '#a6e3a1';
+    ctx.font = '10px monospace';
+    ctx.fillText('ICR', icx+7, icy-6);
+  }
+
+  // Centrifugal force arrow at current position
+  if (!traj.isPivot && traj.vTurn > 0) {
+    const aCent = curPt.aCent || 0;
+    if (aCent > 0.1) {
+      const R = P.radius / 1000;
+      const arrowLen = tf.scale * (aCent / 9.8) * 0.05; // scale visual
+      const [cx0, cy0] = toCanvas(tf, curPt.x, curPt.y);
+      // centrifugal = away from ICR → direction from ICR to robot center
+      // ICR is at (R, 0) in our frame; robot is at (curPt.x, curPt.y)
+      const dx = curPt.x - R, dy = curPt.y - 0;
+      const len = Math.sqrt(dx*dx + dy*dy) || 1;
+      const [tx, ty] = toCanvas(tf, curPt.x + dx/len * arrowLen / tf.scale, curPt.y + dy/len * arrowLen / tf.scale);
+      drawArrow(ctx, cx0, cy0, tx, ty, '#cba6f7', 2.5);
+
+      ctx.fillStyle = '#cba6f7';
+      ctx.font = 'bold 10px monospace';
+      ctx.fillText(`${(aCent/9.8).toFixed(2)}g`, tx+4, ty-4);
+    }
+  }
+
+  // Legend
+  ctx.font = '10px sans-serif';
+  ctx.fillStyle = '#f9e2af'; ctx.fillText('■ 중심', 10, 18);
+  if (!traj.isPivot) {
+    ctx.fillStyle = '#f38ba8'; ctx.fillText('■ 좌바퀴', 60, 18);
+    ctx.fillStyle = '#89b4fa'; ctx.fillText('■ 우바퀴', 118, 18);
+  }
+  ctx.fillStyle = '#cba6f7'; ctx.fillText('→ 원심력', 178, 18);
+  ctx.fillStyle = '#a6e3a1'; ctx.fillText('+ ICR', traj.isPivot ? 60 : 238, 18);
+}
+
+// ── Graph drawing ─────────────────────────────────────────────────────────────
+function drawGraph(canvas, title, lines, yLabel, yUnit, t) {
+  const ctx = canvas.getContext('2d');
+  const cw = canvas.width, ch = canvas.height;
+  ctx.fillStyle = '#1e1e2e';
+  ctx.fillRect(0, 0, cw, ch);
+
+  const pad = { l:38, r:8, t:18, b:20 };
+  const gw = cw - pad.l - pad.r, gh = ch - pad.t - pad.b;
+
+  // Title
+  ctx.fillStyle = '#6c7086';
+  ctx.font = '10px sans-serif';
+  ctx.textAlign = 'left';
+  ctx.fillText(title, pad.l, 12);
+
+  // Axis
+  ctx.strokeStyle = '#383851';
+  ctx.lineWidth = 1;
+  ctx.beginPath();
+  ctx.moveTo(pad.l, pad.t); ctx.lineTo(pad.l, pad.t+gh);
+  ctx.lineTo(pad.l+gw, pad.t+gh);
+  ctx.stroke();
+
+  if (!lines.length) return;
+
+  // Find y range
+  let yMin = Infinity, yMax = -Infinity;
+  for (const { data } of lines) {
+    for (const v of data) { if (v < yMin) yMin = v; if (v > yMax) yMax = v; }
+  }
+  if (yMin === yMax) { yMin -= 1; yMax += 1; }
+  const yPad = (yMax - yMin) * 0.1;
+  yMin -= yPad; yMax += yPad;
+
+  const sx = (i, n) => pad.l + (i / (n-1)) * gw;
+  const sy = (v) => pad.t + gh - (v - yMin) / (yMax - yMin) * gh;
+
+  // Grid lines
+  ctx.strokeStyle = 'rgba(56,56,81,0.6)';
+  ctx.lineWidth = 0.5;
+  const ntick = 4;
+  ctx.font = '9px monospace';
+  ctx.fillStyle = '#6c7086';
+  for (let i = 0; i <= ntick; i++) {
+    const v = yMin + (yMax - yMin) * i / ntick;
+    const y = sy(v);
+    ctx.beginPath(); ctx.moveTo(pad.l, y); ctx.lineTo(pad.l+gw, y); ctx.stroke();
+    ctx.textAlign = 'right';
+    ctx.fillText(v.toFixed(Math.abs(v) < 10 ? 1 : 0), pad.l-3, y+3);
+  }
+  ctx.fillStyle = '#6c7086';
+  ctx.textAlign = 'center';
+  ctx.fillText(yUnit, pad.l/2, pad.t + gh/2);
+
+  // Lines
+  for (const { data, color } of lines) {
+    ctx.beginPath();
+    ctx.strokeStyle = color;
+    ctx.lineWidth = 1.5;
+    for (let i = 0; i < data.length; i++) {
+      const x = sx(i, data.length), y = sy(data[i]);
+      i === 0 ? ctx.moveTo(x, y) : ctx.lineTo(x, y);
+    }
+    ctx.stroke();
+  }
+
+  // Playhead
+  const px = pad.l + t * gw;
+  ctx.beginPath();
+  ctx.moveTo(px, pad.t);
+  ctx.lineTo(px, pad.t+gh);
+  ctx.strokeStyle = 'rgba(249,226,175,0.7)';
+  ctx.lineWidth = 1.5;
+  ctx.setLineDash([3,3]);
+  ctx.stroke();
+  ctx.setLineDash([]);
+}
+
+function buildGraphData(traj) {
+  const N = traj.pts.length;
+  const vCenter = [], vLeft = [], vRight = [], gforce = [], omegaArr = [];
+
+  for (let i = 0; i < N; i++) {
+    vCenter.push(traj.vTurn);
+    vLeft.push(traj.vOuter);
+    vRight.push(traj.vInner);
+    gforce.push(traj.pts[i].aCent / 9.8);
+    omegaArr.push(traj.omega);
+  }
+
+  return { vCenter, vLeft, vRight, gforce, omega: omegaArr };
+}
+
+// ── Stats update ──────────────────────────────────────────────────────────────
+function updateStats(traj) {
+  const set = (id, v) => { document.getElementById(id).textContent = v; };
+  set('sv-vturn',  traj.vTurn.toFixed(3) + ' m/s');
+  set('sv-vouter', traj.vOuter.toFixed(3) + ' m/s');
+  set('sv-vinner', traj.vInner.toFixed(3) + ' m/s');
+  set('sv-omega',  (traj.omega * 180 / Math.PI).toFixed(1) + ' °/s');
+  const fg = traj.vTurn > 0 && !traj.isPivot ? (traj.vTurn*traj.vTurn / P.radius * 1000 / 9.8) : 0;
+  set('sv-fg',     fg.toFixed(3) + ' g');
+  set('sv-ttime',  traj.turnTime.toFixed(4) + ' s');
+  set('sv-dist',   (traj.totalDist * 1000).toFixed(1) + ' mm');
+}
+
+// ── Main draw loop ────────────────────────────────────────────────────────────
+let traj = null;
+let graphData = null;
+
+function drawAll() {
+  traj = computeTraj();
+  graphData = buildGraphData(traj);
+  updateStats(traj);
+  drawMain(traj, animT);
+  drawGraph(gSpeed,  '속도 (m/s)',    [
+    { data: graphData.vCenter, color: '#f9e2af' },
+    { data: graphData.vLeft,   color: '#f38ba8' },
+    { data: graphData.vRight,  color: '#89b4fa' },
+  ], 'm/s', 'm/s', animT);
+  drawGraph(gGforce, '원심 (g)',      [{ data: graphData.gforce, color: '#cba6f7' }], 'g', 'g', animT);
+  drawGraph(gOmega,  '각속도 (°/s)', [{ data: graphData.omega.map(v=>v*180/Math.PI), color: '#a6e3a1' }], '°/s', '°/s', animT);
+}
+
+// ── Animation ─────────────────────────────────────────────────────────────────
+let lastTimestamp = null;
+
+function animFrame(ts) {
+  if (!playing) return;
+  if (lastTimestamp === null) lastTimestamp = ts;
+  const dtMs = ts - lastTimestamp;
+  lastTimestamp = ts;
+
+  if (traj) {
+    const duration = traj.turnTime > 0 ? traj.turnTime * 1000 : 1000;
+    animT = Math.min(animT + (dtMs / duration) * animSpeed, 1);
+  }
+
+  drawAll();
+
+  if (animT >= 1) {
+    playing = false;
+    document.getElementById('btn-play').textContent = '▶ 재생';
+    lastTimestamp = null;
+    return;
+  }
+  requestAnimationFrame(animFrame);
+}
+
+document.getElementById('btn-play').onclick = () => {
+  if (playing) {
+    playing = false;
+    document.getElementById('btn-play').textContent = '▶ 재생';
+    lastTimestamp = null;
+  } else {
+    if (animT >= 1) animT = 0;
+    playing = true;
+    document.getElementById('btn-play').textContent = '⏸ 정지';
+    lastTimestamp = null;
+    requestAnimationFrame(animFrame);
+  }
+};
+
+document.getElementById('btn-reset').onclick = () => {
+  playing = false;
+  document.getElementById('btn-play').textContent = '▶ 재생';
+  animT = 0;
+  lastTimestamp = null;
+  drawAll();
+};
+
+document.getElementById('anim-speed-slider').oninput = (e) => {
+  animSpeed = parseFloat(e.target.value);
+  document.getElementById('anim-speed-val').textContent = animSpeed.toFixed(1) + 'x';
+};
+
+// ── Angle buttons ─────────────────────────────────────────────────────────────
+document.querySelectorAll('.angle-btn').forEach(btn => {
+  btn.onclick = () => {
+    document.querySelectorAll('.angle-btn').forEach(b => b.classList.remove('active'));
+    btn.classList.add('active');
+    document.getElementById('p-custom-angle').value = btn.dataset.angle;
+    animT = 0;
+    drawAll();
+  };
+});
+document.getElementById('p-custom-angle').oninput = () => {
+  document.querySelectorAll('.angle-btn').forEach(b => b.classList.remove('active'));
+  animT = 0;
+  drawAll();
+};
+
+// ── Param change listeners ────────────────────────────────────────────────────
+['p-tread','p-wheel-d','p-mass','p-length','p-vmax','p-accel','p-alat','p-radius'].forEach(id => {
+  document.getElementById(id).oninput = () => { animT = 0; drawAll(); };
+});
+document.querySelectorAll('input[name="turn-type"]').forEach(r => {
+  r.onchange = () => { animT = 0; drawAll(); };
+});
+
+// ── Init ──────────────────────────────────────────────────────────────────────
+drawAll();
+</script>
+</body>
+</html>
