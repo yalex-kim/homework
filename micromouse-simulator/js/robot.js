@@ -147,17 +147,14 @@ class Robot {
 
     async smoothTurnRight() {
         if (this._stopped) throw new StopError();
-        if (this.sensors.right) return false;  // lateral wall blocks arc exit
+        if (this.sensors.right) return false;
 
         const fromAngle = this.angle;
         const toAngle   = (this.angle + 90) % 360;
-        // Diagonal destination: 1 cell forward (old heading) + 1 cell lateral (new heading)
-        const fwdDi = ((Math.round(fromAngle / 90)) % 4 + 4) % 4;
-        const latDi = ((Math.round(toAngle   / 90)) % 4 + 4) % 4;
+        const latDi = ((Math.round(toAngle / 90)) % 4 + 4) % 4;
         const DX = [0, 1, 0, -1], DY = [-1, 0, 1, 0];
-        const nx = this.x + DX[fwdDi] + DX[latDi];
-        const ny = this.y + DY[fwdDi] + DY[latDi];
-        if (nx < 0 || nx >= this.maze.width || ny < 0 || ny >= this.maze.height) return false;
+        const nx = this.x + DX[latDi];
+        const ny = this.y + DY[latDi];
 
         const cp = this._bezierCP(this.x, this.y, fromAngle, nx, ny, toAngle);
         const phys = this.hw ? this.hw.smoothTurnTime() : 0.1;
@@ -177,16 +174,14 @@ class Robot {
 
     async smoothTurnLeft() {
         if (this._stopped) throw new StopError();
-        if (this.sensors.left) return false;   // lateral wall blocks arc exit
+        if (this.sensors.left) return false;
 
         const fromAngle = this.angle;
         const toAngle   = ((this.angle - 90) + 360) % 360;
-        const fwdDi = ((Math.round(fromAngle / 90)) % 4 + 4) % 4;
-        const latDi = ((Math.round(toAngle   / 90)) % 4 + 4) % 4;
+        const latDi = ((Math.round(toAngle / 90)) % 4 + 4) % 4;
         const DX = [0, 1, 0, -1], DY = [-1, 0, 1, 0];
-        const nx = this.x + DX[fwdDi] + DX[latDi];
-        const ny = this.y + DY[fwdDi] + DY[latDi];
-        if (nx < 0 || nx >= this.maze.width || ny < 0 || ny >= this.maze.height) return false;
+        const nx = this.x + DX[latDi];
+        const ny = this.y + DY[latDi];
 
         const cp = this._bezierCP(this.x, this.y, fromAngle, nx, ny, toAngle);
         const phys = this.hw ? this.hw.smoothTurnTime() : 0.1;

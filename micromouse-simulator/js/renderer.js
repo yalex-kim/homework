@@ -199,19 +199,22 @@ class Renderer {
                 ctx.stroke();
                 ctx.setLineDash([]);
 
-                // Solid arc traveled so far
+                // Solid arc traveled so far (De Casteljau subdivision)
+                const curT = easeInOut(anim.progress);
+                const sub = this._bezierLeft(cp, curT);
                 ctx.beginPath();
-                ctx.moveTo(x0, y0);
-                ctx.bezierCurveTo(x1, y1, x2, y2,
-                    padding + robot.visX * cellSize + cellSize/2,
-                    padding + robot.visY * cellSize + cellSize/2);
+                ctx.moveTo(pxF(sub[0][0]), pyF(sub[0][1]));
+                ctx.bezierCurveTo(
+                    pxF(sub[1][0]), pyF(sub[1][1]),
+                    pxF(sub[2][0]), pyF(sub[2][1]),
+                    pxF(sub[3][0]), pyF(sub[3][1])
+                );
                 ctx.strokeStyle = 'rgba(249,226,175,0.85)';
                 ctx.lineWidth = 2;
                 ctx.stroke();
 
                 // Live wheel arcs
                 if (this.showWheels) {
-                    const curT = easeInOut(anim.progress);
                     const { left, right } = this._wheelPtsBezier(cp, treadHalf, 28, curT);
                     this._strokeWheelPath(left,  'rgba(243,139,168,0.85)', 1.5);
                     this._strokeWheelPath(right, 'rgba(137,180,250,0.85)', 1.5);
@@ -247,6 +250,18 @@ class Renderer {
                 }
             }
         }
+    }
+
+    // De Casteljau left-split: sub-bezier from t=0 to t=tEnd
+    _bezierLeft(cp, tEnd) {
+        const L = (a, b) => [a[0]*(1-tEnd)+b[0]*tEnd, a[1]*(1-tEnd)+b[1]*tEnd];
+        const p01   = L(cp[0], cp[1]);
+        const p12   = L(cp[1], cp[2]);
+        const p23   = L(cp[2], cp[3]);
+        const p012  = L(p01,  p12);
+        const p123  = L(p12,  p23);
+        const p0123 = L(p012, p123);
+        return [cp[0], p01, p012, p0123];
     }
 
     // Bezier tangent vector at parameter t (in cell coords)
@@ -338,70 +353,144 @@ class Renderer {
     }
 
     _drawSensors() {
-        const { ctx, robot, cellSize, padding } = this;
-        const rpx = padding + robot.visX * cellSize + cellSize/2;
-        const rpy = padding + robot.visY * cellSize + cellSize/2;
-        const beam = cellSize * 0.82;
+        const { ctx, robot, cellSize: cs, padding } = this;
+        const rpx = padding + robot.visX * cs + cs/2;
+        const rpy = padding + robot.visY * cs + cs/2;
         const s = robot.sensors;
-
-        const BEAMS = [
-            {relDeg:   0, key:'front',      color:'#f38ba8'},
-            {relDeg:  90, key:'right',       color:'#89b4fa'},
-            {relDeg: 180, key:'back',        color:'#a6e3a1'},
-            {relDeg: 270, key:'left',        color:'#f9e2af'},
-            {relDeg:  45, key:'frontRight',  color:'#cba6f7', diag:true},
-            {relDeg: 135, key:'backRight',   color:'#89dceb', diag:true},
-            {relDeg: 225, key:'backLeft',    color:'#b4befe', diag:true},
-            {relDeg: 315, key:'frontLeft',   color:'#fab387', diag:true},
-        ];
-
-        for (const { relDeg, key, color, diag } of BEAMS) {
-            const rad     = (robot.visAngle + relDeg - 90) * Math.PI / 180;
-            const hasWall = s[key];
-            const len     = hasWall ? beam * 0.35 : beam;
-            const alpha   = hasWall ? 0.9 : (diag ? 0.2 : 0.3);
-
-            const rgb = this._hexRgb(color);
-            ctx.beginPath();
-            ctx.moveTo(rpx, rpy);
-            ctx.lineTo(rpx + Math.cos(rad)*len, rpy + Math.sin(rad)*len);
-            ctx.strokeStyle = `rgba(${rgb},${alpha})`;
-            ctx.lineWidth = hasWall ? 2 : 1;
-            ctx.stroke();
-
-            if (hasWall) {
-                ctx.beginPath();
-                ctx.arc(rpx+Math.cos(rad)*len, rpy+Math.sin(rad)*len, 2, 0, Math.PI*2);
-                ctx.fillStyle = `rgba(${rgb},0.9)`;
-                ctx.fill();
-            }
-        }
-    }
-
-    _drawRobot() {
-        const { ctx, robot, cellSize, padding } = this;
-        const rpx = padding + robot.visX * cellSize + cellSize/2;
-        const rpy = padding + robot.visY * cellSize + cellSize/2;
-        const r   = cellSize * 0.32;
 
         ctx.save();
         ctx.translate(rpx, rpy);
         ctx.rotate((robot.visAngle - 90) * Math.PI / 180);
 
-        ctx.beginPath();
-        ctx.arc(0, 0, r, 0, Math.PI*2);
-        ctx.fillStyle = '#f38ba8';
-        ctx.fill();
-        ctx.strokeStyle = '#cdd6f4';
-        ctx.lineWidth = 1.5;
-        ctx.stroke();
+        // Robot body geometry (must match _drawRobot)
+        const bw = cs * 0.30, bh = cs * 0.33, ch = cs * 0.09;
 
+        // Sensor cones: relDeg from forward (0=fwd,90=right,270=left,315=fwd-left)
+        // In local frame: forward=-y, right=+x
+        // Canvas angle for relDeg = (relDeg - 90) * π/180
+        const CONES = [
+            { relDeg: 315, key: 'frontLeft',  half: 22, color: '#fab387',
+              ox: -(bw - ch * 0.5), oy: -(bh - ch * 0.5) },
+            { relDeg:  45, key: 'frontRight', half: 22, color: '#cba6f7',
+              ox:   bw - ch * 0.5,  oy: -(bh - ch * 0.5) },
+            { relDeg:   0, key: 'front',      half: 12, color: '#f38ba8',
+              ox:  0,                oy: -bh * 0.85 },
+            { relDeg:  90, key: 'right',      half:  8, color: '#89b4fa',
+              ox:  bw * 0.90,        oy:  0 },
+            { relDeg: 270, key: 'left',       half:  8, color: '#f9e2af',
+              ox: -bw * 0.90,        oy:  0 },
+        ];
+
+        for (const { relDeg, key, half, color, ox, oy } of CONES) {
+            const hasWall = s[key];
+            const dir   = (relDeg - 90) * Math.PI / 180;
+            const halfR = half * Math.PI / 180;
+            const len   = hasWall ? cs * 0.42 : cs * 0.58;
+            const rgb   = this._hexRgb(color);
+
+            ctx.beginPath();
+            ctx.moveTo(ox, oy);
+            ctx.arc(ox, oy, len, dir - halfR, dir + halfR);
+            ctx.closePath();
+            ctx.fillStyle   = `rgba(${rgb},${hasWall ? 0.28 : 0.07})`;
+            ctx.fill();
+            ctx.strokeStyle = `rgba(${rgb},${hasWall ? 0.70 : 0.18})`;
+            ctx.lineWidth   = hasWall ? 1.0 : 0.5;
+            ctx.stroke();
+
+            if (hasWall) {
+                ctx.beginPath();
+                ctx.arc(ox + Math.cos(dir) * len, oy + Math.sin(dir) * len, 2.5, 0, Math.PI*2);
+                ctx.fillStyle = `rgba(${rgb},0.95)`;
+                ctx.fill();
+            }
+        }
+
+        ctx.restore();
+    }
+
+    _drawRobot() {
+        const { ctx, robot, cellSize: cs, padding } = this;
+        const rpx = padding + robot.visX * cs + cs/2;
+        const rpy = padding + robot.visY * cs + cs/2;
+
+        ctx.save();
+        ctx.translate(rpx, rpy);
+        ctx.rotate((robot.visAngle - 90) * Math.PI / 180);
+
+        // Body geometry — forward is -y in local frame
+        const bw = cs * 0.30, bh = cs * 0.33, ch = cs * 0.09;
+
+        // Tread half-width in px (wheel center distance from robot center)
+        const treadHalf = robot.hw
+            ? (robot.hw.treadWidth / robot.hw.cellSize / 2) * cs
+            : 0.239 * cs;
+
+        // Wheel dimensions
+        const ww = cs * 0.13;   // wheel width (axle direction)
+        const wh = cs * 0.28;   // wheel height (forward direction)
+        const wy = bh * 0.56;   // front/rear wheel center offset
+
+        // Four wheels (drawn behind body)
+        ctx.fillStyle = '#101018';
+        ctx.strokeStyle = 'rgba(160,160,220,0.45)';
+        ctx.lineWidth = 0.5;
+        for (const [sx, sy] of [[-1,-1],[1,-1],[-1,1],[1,1]]) {
+            const wx = sx * treadHalf, wcy = sy * wy;
+            ctx.fillRect(wx - ww/2, wcy - wh/2, ww, wh);
+            ctx.strokeRect(wx - ww/2, wcy - wh/2, ww, wh);
+        }
+
+        // Octagonal PCB body
+        const octo = () => {
+            ctx.beginPath();
+            ctx.moveTo(-bw + ch, -bh);
+            ctx.lineTo( bw - ch, -bh);
+            ctx.lineTo( bw,      -bh + ch);
+            ctx.lineTo( bw,       bh - ch);
+            ctx.lineTo( bw - ch,  bh);
+            ctx.lineTo(-bw + ch,  bh);
+            ctx.lineTo(-bw,       bh - ch);
+            ctx.lineTo(-bw,      -bh + ch);
+            ctx.closePath();
+        };
+        octo(); ctx.fillStyle = '#0e2038'; ctx.fill();
+        octo(); ctx.strokeStyle = '#3a8fe8'; ctx.lineWidth = 1.5; ctx.stroke();
+
+        // Subtle PCB trace lines
+        ctx.strokeStyle = 'rgba(58,143,232,0.09)';
+        ctx.lineWidth = 0.5;
+        for (const fx of [-0.4, 0.4]) {
+            ctx.beginPath(); ctx.moveTo(fx*bw, -bh+1); ctx.lineTo(fx*bw,  bh-1); ctx.stroke();
+        }
+        for (const fy of [-0.4, 0.4]) {
+            ctx.beginPath(); ctx.moveTo(-bw+1, fy*bh); ctx.lineTo( bw-1, fy*bh); ctx.stroke();
+        }
+
+        // IR sensor PCBs at the two chamfered front corners
+        const sc = cs * 0.07;
+        for (const sx of [-1, 1]) {
+            ctx.save();
+            ctx.translate(sx * (bw - ch * 0.5), -bh + ch * 0.5);
+            ctx.rotate(sx * 45 * Math.PI / 180);
+            // Yellow PCB board
+            ctx.fillStyle = '#b88a00';
+            ctx.fillRect(-sc * 0.9, -sc * 0.45, sc * 1.8, sc * 0.9);
+            // IR emitter dot
+            ctx.beginPath();
+            ctx.arc(sc * 0.55, 0, sc * 0.26, 0, Math.PI * 2);
+            ctx.fillStyle = '#ffee44';
+            ctx.fill();
+            ctx.restore();
+        }
+
+        // Forward direction arrow
         ctx.beginPath();
-        ctx.moveTo(0, -r*0.85);
-        ctx.lineTo(-r*0.38, r*0.45);
-        ctx.lineTo( r*0.38, r*0.45);
+        ctx.moveTo(0, -bh * 0.70);
+        ctx.lineTo(-cs * 0.075, -bh * 0.28);
+        ctx.lineTo( cs * 0.075, -bh * 0.28);
         ctx.closePath();
-        ctx.fillStyle = '#1e1e2e';
+        ctx.fillStyle = 'rgba(255,215,50,0.85)';
         ctx.fill();
 
         ctx.restore();
