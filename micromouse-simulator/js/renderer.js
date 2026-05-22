@@ -360,7 +360,7 @@ class Renderer {
 
         ctx.save();
         ctx.translate(rpx, rpy);
-        ctx.rotate((robot.visAngle - 90) * Math.PI / 180);
+        ctx.rotate(robot.visAngle * Math.PI / 180);
 
         // Robot body geometry (must match _drawRobot)
         const bw = cs * 0.30, bh = cs * 0.33, ch = cs * 0.09;
@@ -416,7 +416,7 @@ class Renderer {
 
         ctx.save();
         ctx.translate(rpx, rpy);
-        ctx.rotate((robot.visAngle - 90) * Math.PI / 180);
+        ctx.rotate(robot.visAngle * Math.PI / 180);
 
         // Body geometry — forward is -y in local frame
         const bw = cs * 0.30, bh = cs * 0.33, ch = cs * 0.09;
