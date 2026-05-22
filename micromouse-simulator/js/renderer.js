@@ -365,20 +365,21 @@ class Renderer {
         // Robot body geometry (must match _drawRobot)
         const bw = cs * 0.30, bh = cs * 0.33, ch = cs * 0.09;
 
-        // Sensor cones: relDeg from forward (0=fwd,90=right,270=left,315=fwd-left)
-        // In local frame: forward=-y, right=+x
-        // Canvas angle for relDeg = (relDeg - 90) * π/180
+        // 4-sensor layout matching the real robot:
+        //   - Two sensors angled slightly outward from front (±15°) → front wall detection
+        //   - Two diagonal sensors (±45°)                           → side wall detection
+        //   - No pure side (90°/270°) sensors
+        // relDeg is measured from forward (0=fwd, 90=right, 270=left)
+        // canvas angle in local frame = (relDeg - 90) * π/180
         const CONES = [
-            { relDeg: 315, key: 'frontLeft',  half: 22, color: '#fab387',
+            { relDeg: 345, key: 'front',      half: 12, color: '#f38ba8',
+              ox: -bw * 0.40, oy: -bh * 0.88 },
+            { relDeg:  15, key: 'front',      half: 12, color: '#f38ba8',
+              ox:  bw * 0.40, oy: -bh * 0.88 },
+            { relDeg: 315, key: 'frontLeft',  half: 18, color: '#fab387',
               ox: -(bw - ch * 0.5), oy: -(bh - ch * 0.5) },
-            { relDeg:  45, key: 'frontRight', half: 22, color: '#cba6f7',
+            { relDeg:  45, key: 'frontRight', half: 18, color: '#cba6f7',
               ox:   bw - ch * 0.5,  oy: -(bh - ch * 0.5) },
-            { relDeg:   0, key: 'front',      half: 12, color: '#f38ba8',
-              ox:  0,                oy: -bh * 0.85 },
-            { relDeg:  90, key: 'right',      half:  8, color: '#89b4fa',
-              ox:  bw * 0.90,        oy:  0 },
-            { relDeg: 270, key: 'left',       half:  8, color: '#f9e2af',
-              ox: -bw * 0.90,        oy:  0 },
         ];
 
         for (const { relDeg, key, half, color, ox, oy } of CONES) {
