@@ -127,10 +127,11 @@ class Simulator {
         this._running = false;
         this._lastTime = 0;
 
-        // Lap timer: starts when robot leaves starting cell, stops at goal
-        this._lapState   = 'at_start'; // 'at_start' | 'timing' | 'idle'
-        this._lapStart   = 0;
-        this._lapHistory = [];     // sorted ascending (fastest first)
+        // Lap timer
+        this._lapActive      = false;
+        this._lapStart       = 0;
+        this._lapPrevAtStart = true;   // robot begins at start
+        this._lapHistory     = [];     // sorted ascending (fastest first)
     }
 
     init() {
@@ -152,9 +153,12 @@ class Simulator {
         document.getElementById('btn-new-maze').onclick   = () => this.newMaze();
         document.getElementById('btn-default').onclick    = () => this._editor.setValue(DEFAULT_ALGORITHM);
         document.getElementById('btn-clear-laps').onclick = () => {
-            this._lapHistory = [];
-            this._lapState   = 'idle';
+            this._lapHistory     = [];
+            this._lapActive      = false;
+            this._lapPrevAtStart = (this.robot.x === 0 && this.robot.y === this.maze.height - 1);
             this._updateLapDisplay();
+            const el = document.getElementById('lap-live');
+            if (el) { el.className = ''; el.textContent = '대기 중'; }
         };
 
         // Maze selector
@@ -223,8 +227,9 @@ class Simulator {
         this.renderer.updateFloodFill(this.ff);
         this._setStatus('준비', 'idle');
         // Clear lap history on new maze
-        this._lapHistory = [];
-        this._lapState   = 'at_start';
+        this._lapHistory     = [];
+        this._lapActive      = false;
+        this._lapPrevAtStart = true;
         this._updateLapDisplay();
     }
 
@@ -266,9 +271,10 @@ class Simulator {
             this.robot.reset();
             this.ff = new FloodFill(this.maze, this.hardware);
             this.renderer.updateFloodFill(this.ff);
-            this._lapState = 'at_start';
-            document.getElementById('lap-live').textContent = '대기 중';
-            document.getElementById('lap-live').className   = '';
+            this._lapActive      = false;
+            this._lapPrevAtStart = true;
+            const lapEl = document.getElementById('lap-live');
+            if (lapEl) { lapEl.className = ''; lapEl.textContent = '대기 중'; }
             this._setStatus('준비', 'idle');
         }, 80);
     }
@@ -329,39 +335,40 @@ class Simulator {
     // ── Lap timer ────────────────────────────────────────────────────────────
 
     _checkLapTimer() {
-        const r      = this.robot;
-        const el     = document.getElementById('lap-live');
-        const startX = 0, startY = this.maze.height - 1;
+        const r       = this.robot;
+        const el      = document.getElementById('lap-live');
+        if (!el) return;
 
-        // Robot left start → begin timing
-        if (this._lapState === 'at_start') {
-            if (r.x !== startX || r.y !== startY) {
-                this._lapState = 'timing';
-                this._lapStart = r.elapsedTime;
-                el.className   = 'timing';
-                el.textContent = '0.000s';
+        const atStart = (r.x === 0 && r.y === this.maze.height - 1);
+        const prev    = this._lapPrevAtStart;
+        this._lapPrevAtStart = atStart;
+
+        if (!this._lapActive) {
+            // Edge: robot just LEFT start cell → begin timing
+            if (prev && !atStart) {
+                this._lapActive = true;
+                this._lapStart  = r.elapsedTime;
+                el.className    = 'timing';
+                el.textContent  = '0.000s';
+            }
+            // Edge: robot just ARRIVED back at start → ready for next lap
+            if (!prev && atStart) {
+                el.className   = '';
+                el.textContent = '대기 중';
             }
         }
 
-        // Timer running → update display, stop at goal
-        if (this._lapState === 'timing') {
+        if (this._lapActive) {
             const cur = r.elapsedTime - this._lapStart;
             el.textContent = cur.toFixed(3) + 's';
             if (r.atGoal) {
                 this._lapHistory.push(cur);
                 this._lapHistory.sort((a, b) => a - b);
-                this._lapState = 'idle';
-                el.className   = 'done';
-                el.textContent = cur.toFixed(3) + 's ✓';
+                this._lapActive = false;
+                el.className    = 'done';
+                el.textContent  = cur.toFixed(3) + 's ✓';
                 this._updateLapDisplay();
             }
-        }
-
-        // Robot returned to start → ready for next lap
-        if (this._lapState === 'idle' && r.x === startX && r.y === startY) {
-            this._lapState     = 'at_start';
-            el.className       = '';
-            el.textContent     = '대기 중';
         }
     }
 
