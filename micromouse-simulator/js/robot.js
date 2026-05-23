@@ -144,8 +144,16 @@ class Robot {
     }
 
     // ── Smooth arc turn + advance ─────────────────────────────────────────────
-    // Geometry: entry straight (1-R) + quarter-circle arc + exit straight (1-R)
-    // Destination is diagonal: forward one cell + lateral one cell.
+    // Geometry (matching the turn simulator):
+    //   Entry straight (1−R) → quarter-circle arc → exit straight (1−R)
+    //
+    // Coordinate mapping:
+    //   • "Entry cell"   = previous cell  (robot came from there — wall is always open)
+    //   • "Turning cell" = current cell   (where the arc corner sits)
+    //   • "Exit cell"    = lateral cell   (one step in the turn direction)
+    //
+    // Wall checks: only the lateral wall from the current cell (identical to the
+    // original sensors.right check that the flood-fill already used).
 
     _arcAnim(fromAngle, toAngle, sign) {
         const DX = [0, 1, 0, -1], DY = [-1, 0, 1, 0];
@@ -153,49 +161,54 @@ class Robot {
         const fromDi = ((Math.round(fromAngle / 90)) % 4 + 4) % 4;
         const toDi   = ((Math.round(toAngle  / 90)) % 4 + 4) % 4;
 
-        // Diagonal destination: forward + lateral
-        const nx = this.x + DX[fromDi] + DX[toDi];
-        const ny = this.y + DY[fromDi] + DY[toDi];
+        // Lateral destination (same as the original bezier approach)
+        const nx = this.x + DX[toDi];
+        const ny = this.y + DY[toDi];
 
-        // Turning cell (one step forward)
-        const tx = this.x + DX[fromDi];
-        const ty = this.y + DY[fromDi];
-
-        // Wall checks: forward must be clear (to enter turning cell),
-        // and lateral must be clear from current cell (matches flood fill's assumption).
-        if (tx < 0 || tx >= this.maze.width  || ty < 0 || ty >= this.maze.height) return null;
+        // Only check the lateral wall — this is what the flood fill verified
         if (nx < 0 || nx >= this.maze.width  || ny < 0 || ny >= this.maze.height) return null;
-        if (this.maze.hasWall(this.x, this.y, DIRS[fromDi])) return null;  // forward
-        if (this.maze.hasWall(this.x, this.y, DIRS[toDi]))   return null;  // lateral
+        if (this.maze.hasWall(this.x, this.y, DIRS[toDi])) return null;
 
         const R = this.hw
             ? Math.min(this.hw.smoothRadius / this.hw.cellSize, 0.45)
             : 0.25;
 
-        // Heading unit vectors (screen y-down: angle 0=North→(0,-1), 90=East→(1,0))
+        // Heading unit vectors (screen y-down)
         const vec = (a) => {
             const r = (a - 90) * Math.PI / 180;
             return [Math.cos(r), Math.sin(r)];
         };
-        const ev = vec(fromAngle);
-        const rv = vec(toAngle);
+        const ev = vec(fromAngle);   // unit vector in heading direction
+        const rv = vec(toAngle);     // unit vector after turn
 
-        // Arc geometry
-        const P_in  = [this.x + ev[0]*(1-R), this.y + ev[1]*(1-R)];
-        // Arc center is R to the right (sign=+1) or left (sign=-1) of heading
-        const arcCx = P_in[0] + sign*(-ev[1])*R;
-        const arcCy = P_in[1] + sign*( ev[0])*R;
-        // P_out: rotate arm0 = (P_in - arcC) by 90° (exact)
+        // Arc geometry starts from the PREVIOUS cell center
+        // (robot just came from there — that wall is always open)
+        const prevX = this.x - DX[fromDi];
+        const prevY = this.y - DY[fromDi];
+
+        // P_in: (1−R) forward from previous cell center  → inside current cell
+        const P_in  = [prevX + ev[0] * (1 - R), prevY + ev[1] * (1 - R)];
+        // Arc center: R perpendicular to heading (right=+1, left=−1)
+        const arcCx = P_in[0] + sign * (-ev[1]) * R;
+        const arcCy = P_in[1] + sign * ( ev[0]) * R;
+        // P_out: 90° rotation of (P_in − arcCenter)
         const arm0x = P_in[0] - arcCx, arm0y = P_in[1] - arcCy;
         const P_out = [arcCx - sign * arm0y, arcCy + sign * arm0x];
+        // Verify: exit straight from P_out heading rv for (1−R) should reach (nx,ny)
+        // P_out + rv*(1−R) = nx,ny  ✓ (by construction of this geometry)
 
-        const totalLen = 2*(1-R) + Math.PI*R/2;
+        const totalLen = 2 * (1 - R) + Math.PI * R / 2;
+        // startProgress: skip the entry straight in the LIVE animation
+        // (the robot has already physically traversed it via the preceding moveForward).
+        // Historical rendering still draws the full path.
+        const startProgress = (1 - R) / totalLen;
 
         return {
             type: 'arc',
-            fromX: this.x, fromY: this.y, toX: nx, toY: ny,
+            fromX: prevX, fromY: prevY, toX: nx, toY: ny,
             P_in, P_out, arcC: [arcCx, arcCy],
             ev, rv, fromAngle, toAngle, sign, R, totalLen,
+            startProgress,
             duration: this._smoothDuration,
             physTime: this.hw ? this.hw.smoothTurnTime() : 0.1,
         };
@@ -285,7 +298,7 @@ class Robot {
 
     _startAnim(anim) {
         return new Promise((resolve) => {
-            this._anim = {...anim, progress: 0, resolve};
+            this._anim = {...anim, progress: anim.startProgress ?? 0, resolve};
         });
     }
 
@@ -328,8 +341,8 @@ class Robot {
             const ef = (1 - R) / totalLen;
             const af = (Math.PI * R / 2) / totalLen;
 
-            // Use linear t for constant-speed motion through geometry
-            const pathT = t;
+            // Use raw progress (not easeInOut) so linear phase boundaries align
+            const pathT = this._anim.progress;
 
             if (pathT <= ef) {
                 const frac = ef > 0 ? pathT / ef : 1;

@@ -1,0 +1,76 @@
+<!DOCTYPE html>
+<html>
+<head><meta charset="UTF-8"><title>Arc Turn Test</title></head>
+<body>
+<canvas id="maze-canvas"></canvas>
+<div id="log" style="font-family:monospace;font-size:12px;white-space:pre"></div>
+<script src="js/maze.js"></script>
+<script src="js/hardware.js"></script>
+<script src="js/floodfill.js"></script>
+<script src="js/robot.js"></script>
+<script src="js/renderer.js"></script>
+<script>
+const log = (s) => { document.getElementById('log').textContent += s + '\n'; console.log(s); };
+
+const maze = new Maze();
+const hw   = new HardwareProfile({ turnType:'smooth', smoothRadius:0.045, cellSize:0.180 });
+const robot = new Robot(maze, hw);
+robot.speed = 8;
+
+const canvas = document.getElementById('maze-canvas');
+const renderer = new Renderer(canvas, maze, robot, null);
+
+// Count arc vs pivot
+let arcSucc = 0, arcFail = 0, pivotCount = 0;
+const origArcAnim = Robot.prototype._arcAnim;
+Robot.prototype._arcAnim = function(...args) {
+  const r = origArcAnim.apply(this, args);
+  r ? arcSucc++ : arcFail++;
+  return r;
+};
+const origTurnRight = Robot.prototype.turnRight;
+Robot.prototype.turnRight = async function(...args) {
+  pivotCount++;
+  return origTurnRight.apply(this, args);
+};
+const origTurnLeft = Robot.prototype.turnLeft;
+Robot.prototype.turnLeft = async function(...args) {
+  pivotCount++;
+  return origTurnLeft.apply(this, args);
+};
+
+// Run flood fill algorithm
+const ff = new FloodFill(maze, hw);
+function facing() {
+  return ['n','e','s','w'][((Math.round(robot.angle/90))%4+4)%4];
+}
+
+let frame = 0;
+const loop = (t) => {
+  robot.update(16);
+  renderer.render();
+  frame++;
+  requestAnimationFrame(loop);
+};
+requestAnimationFrame(loop);
+
+async function runSim() {
+  log('Starting simulation...');
+  let steps = 0;
+  while (!robot.atGoal && steps++ < 2000) {
+    ff.sense(robot);
+    const dir = ff.bestDir(robot.x, robot.y, facing());
+    if (!dir) { log('No path!'); break; }
+    await robot.moveTo(dir);
+  }
+  log(`Done. atGoal=${robot.atGoal} steps=${steps}`);
+  log(`Arc turns: succeeded=${arcSucc} failed=${arcFail}`);
+  log(`Pivot turns: ${pivotCount}`);
+  log(`Odometer: ${robot.odometer} cells`);
+  window._result = { arcSucc, arcFail, pivotCount, atGoal: robot.atGoal };
+}
+
+runSim();
+</script>
+</body>
+</html>

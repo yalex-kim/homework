@@ -189,7 +189,7 @@ class Renderer {
         if (anim) {
             const last = pts[pts.length - 1];
             if (anim.type === 'arc') {
-                const curT = easeInOut(anim.progress);
+                const curT = anim.progress;  // raw progress — matches update() arc handler
                 // Faint preview of full path
                 const full = this._arcSample(anim, treadHalf, 40, 1);
                 ctx.beginPath();
