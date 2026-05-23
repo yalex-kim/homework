@@ -1,39 +1,76 @@
-// ── Default algorithm (Flood Fill) ───────────────────────────────────────────
+// ── Default algorithm (3-phase: explore → return → speed run) ────────────────
 const DEFAULT_ALGORITHM =
-`// ===== 플러드 필 탐색 알고리즘 =====
+`// ===== 마이크로마우스 3단계 탐색 알고리즘 =====
 //
-// 제공 객체:
-//   robot  — 로봇 제어
-//   ff     — FloodFill 인스턴스 (역방향 시간 추산)
+// Phase 1: 출발 → 목표  (플러드 필 탐색)
+// Phase 2: 목표 → 출발  (귀환하며 추가 벽 탐색)
+// Phase 3: 최적 경로 속도 주행  (직진 블럭 연결 가속)
 //
-// 주요 API:
-//   ff.sense(robot)                      → 센서 읽어 벽 지식 업데이트 + 재계산
-//   ff.bestDir(x, y, facing)             → turn penalty 반영 최적 방향 반환
-//   ff.getDistMap()[y][x]                → 각 셀의 목표까지 추산 비용
-//   await robot.moveTo('n'|'e'|'s'|'w')  → 절대 방향으로 이동 (smooth/pivot 자동)
-//   robot.sensors.gyro                   → 자이로 각속도 (°/s)
-//   robot.elapsedTime                    → 누적 물리 시간 (초)
-//
-// 경계선 감지 모델:
-//   moveTo() 는 블럭 경계선(블럭 중심에서 0.5칸)에서 멈추고 제어를 반환합니다.
-//   그 시점에 robot.x/y 는 새 셀로 업데이트되고, sensors 는 새 셀의 벽을 읽습니다.
-//   따라서 ff.sense() / ff.bestDir() 는 항상 경계선에서 호출됩니다.
+// API:
+//   ff.sense(robot)                         → 벽 탐지 & FF 업데이트
+//   ff.bestDir(x, y, facing)                → 최적 방향 반환
+//   ff.setGoals([[x,y],...])                → 목표 셀 변경 & FF 재계산
+//   ff.knownWalls[y][x][dir]                → 알려진 벽 여부
+//   ff.getDistMap()[y][x]                   → 목표까지 추산 비용
+//   await robot.moveTo('n'|'e'|'s'|'w')     → 회전+1칸 이동
+//   await robot.moveForwardFast(n)          → n칸 연속 직진 (속도 주행용)
 
 function facing() {
     return ['n','e','s','w'][((Math.round(robot.angle / 90)) % 4 + 4) % 4];
 }
 
+const W = robot.maze.width, H = robot.maze.height;
+const START_X = 0, START_Y = H - 1;
+const DX = {n:0, e:1, s:0, w:-1}, DY = {n:-1, e:0, s:1, w:0};
+
+// ── Phase 1: 목표까지 탐색 ────────────────────────────────────────────────────
 let steps = 0;
 while (!robot.atGoal && steps++ < 3000) {
-    // 경계선 도착 시 벽 감지 → 플러드 필 업데이트
     ff.sense(robot);
+    const dir = ff.bestDir(robot.x, robot.y, facing());
+    if (!dir) { console.log('경로 없음!'); break; }
+    await robot.moveTo(dir);
+}
+if (!robot.atGoal) { console.log('목표 도달 실패'); return; }
+console.log(\`Phase 1 완료: \${robot.odometer}칸 / \${robot.elapsedTime.toFixed(2)}s\`);
 
-    // turn penalty를 반영한 최적 이동 방향 계산
+// ── Phase 2: 출발점으로 귀환하며 추가 탐색 ──────────────────────────────────
+ff.setGoals([[START_X, START_Y]]);
+steps = 0;
+while ((robot.x !== START_X || robot.y !== START_Y) && steps++ < 3000) {
+    ff.sense(robot);
+    const dir = ff.bestDir(robot.x, robot.y, facing());
+    if (!dir) { console.log('귀환 경로 없음!'); break; }
+    await robot.moveTo(dir);
+}
+console.log(\`Phase 2 완료: \${robot.odometer}칸 / \${robot.elapsedTime.toFixed(2)}s\`);
+
+// ── Phase 3: 최적 경로 속도 주행 ─────────────────────────────────────────────
+ff.setGoals([[7,7],[8,7],[7,8],[8,8]]);
+steps = 0;
+while (!robot.atGoal && steps++ < 3000) {
     const dir = ff.bestDir(robot.x, robot.y, facing());
     if (!dir) { console.log('경로 없음!'); break; }
 
-    // 다음 경계선까지 이동 (smooth turn 또는 pivot turn 자동 선택)
-    await robot.moveTo(dir);
+    if (facing() === dir) {
+        // 직진 방향 — 연속 직진 칸 수를 계산해 한 번에 가속 이동
+        let cnt = 0, cx = robot.x, cy = robot.y;
+        while (cnt < H) {
+            if (ff.knownWalls[cy][cx][dir]) break;
+            const nx = cx + DX[dir], ny = cy + DY[dir];
+            if (nx < 0 || nx >= W || ny < 0 || ny >= H) break;
+            if (ff.getDistMap()[ny][nx] === Infinity) break;
+            cx = nx; cy = ny; cnt++;
+            if (ff.bestDir(cx, cy, dir) !== dir) break;
+        }
+        await (cnt >= 2 ? robot.moveForwardFast(cnt) : robot.moveTo(dir));
+    } else {
+        await robot.moveTo(dir);
+    }
+}
+
+if (robot.atGoal) {
+    console.log(\`완료! \${robot.odometer}칸 / \${robot.elapsedTime.toFixed(2)}s\`);
 }`;
 
 // ── Simulator controller ──────────────────────────────────────────────────────

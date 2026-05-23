@@ -141,4 +141,10 @@ class FloodFill {
     }
 
     getDistMap() { return this.dist; }
+
+    // Change goal cells and recompute distances.
+    setGoals(goals) {
+        this.GOALS = goals;
+        this.compute();
+    }
 }

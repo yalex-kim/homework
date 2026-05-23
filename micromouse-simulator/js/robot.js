@@ -129,13 +129,24 @@ class Robot {
         } else {
             // Normal boundary arrival
             this._atBoundary = true;
-            this.odometer++;
+            const cells = m.multiCell ?? 1;
+            this.odometer += cells;
+            // Mark all traversed cells explored (multi-cell fast move)
+            if (cells > 1 && m.fromLogX != null) {
+                for (let i = 1; i <= cells; i++) {
+                    const ex = m.fromLogX + m.dx * i;
+                    const ey = m.fromLogY + m.dy * i;
+                    if (ex >= 0 && ex < this.maze.width && ey >= 0 && ey < this.maze.height)
+                        this.maze.explored[ey][ex] = true;
+                }
+            } else {
+                this.maze.explored[this.y][this.x] = true;
+            }
             this.path.push({
                 x: this.x, y: this.y,
                 visX: this.visX, visY: this.visY,
                 seg: {type: 'move'},
             });
-            this.maze.explored[this.y][this.x] = true;
         }
         this._finishMotion();
     }
@@ -369,6 +380,42 @@ class Robot {
                 decel: hw ? hw.decel   / hw.cellSize : 9.0,
             });
         }
+        return true;
+    }
+
+    // Move straight through multiple cells in one continuous velocity profile (speed run).
+    // Requires _atBoundary=true. Falls back to single moveForward for cells ≤ 1.
+    async moveForwardFast(cells = 1) {
+        if (this._stopped) throw new StopError();
+        if (cells <= 1) return await this.moveForward();
+
+        const DX = [0,1,0,-1], DY = [-1,0,1,0], DIRS = ['n','e','s','w'];
+        const di = ((Math.round(this.angle / 90)) % 4 + 4) % 4;
+
+        // Clamp to actual traversable count using maze walls
+        let cx = this.x, cy = this.y, actualCells = 0;
+        for (let i = 0; i < cells; i++) {
+            if (this.maze.hasWall(cx, cy, DIRS[di])) break;
+            cx += DX[di]; cy += DY[di];
+            actualCells++;
+        }
+        if (actualCells === 0) return false;
+        if (actualCells === 1) return await this.moveForward();
+
+        const toX = this.x + DX[di] * actualCells;
+        const toY = this.y + DY[di] * actualCells;
+        const hw  = this.hw;
+        await this._startMotion({
+            type: 'straight',
+            x0: this.visX, y0: this.visY, toX, toY,
+            fromLogX: this.x, fromLogY: this.y,
+            dx: DX[di], dy: DY[di], angle: this.angle,
+            dist: 0, dist1: actualCells, vel: 0,
+            vMax:  hw ? hw.maxSpeed / hw.cellSize : 3.0,
+            accel: hw ? hw.accel   / hw.cellSize : 9.0,
+            decel: hw ? hw.decel   / hw.cellSize : 9.0,
+            multiCell: actualCells,
+        });
         return true;
     }
 
