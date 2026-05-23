@@ -121,6 +121,10 @@ class Renderer {
         const pxF = (cx) => padding + cx * cellSize + cellSize / 2;
         const pyF = (cy) => padding + cy * cellSize + cellSize / 2;
 
+        // Use stored visual position (boundary or centre) if available
+        const vx = (pt) => pt.visX ?? pt.x;
+        const vy = (pt) => pt.visY ?? pt.y;
+
         // Half-tread width in cell units (default 86mm / 180mm / 2 ≈ 0.239)
         const treadHalf = robot.hw
             ? (robot.hw.treadWidth / robot.hw.cellSize) / 2
@@ -133,7 +137,6 @@ class Renderer {
 
             if (seg && seg.type === 'arc') {
                 const { center, left, right } = this._arcSample(seg, treadHalf);
-                // Center path
                 ctx.beginPath();
                 center.forEach(([cx,cy], j) =>
                     j===0 ? ctx.moveTo(pxF(cx),pyF(cy)) : ctx.lineTo(pxF(cx),pyF(cy)));
@@ -146,21 +149,22 @@ class Renderer {
                 }
             } else {
                 ctx.beginPath();
-                ctx.moveTo(pxF(pts[i-1].x), pyF(pts[i-1].y));
-                ctx.lineTo(pxF(pts[i].x),   pyF(pts[i].y));
+                ctx.moveTo(pxF(vx(pts[i-1])), pyF(vy(pts[i-1])));
+                ctx.lineTo(pxF(vx(pts[i])),   pyF(vy(pts[i])));
                 ctx.strokeStyle = `rgba(249,226,175,${alpha})`;
                 ctx.lineWidth = 2;
                 ctx.stroke();
                 if (this.showWheels && seg && (seg.type === 'move' || seg.type === 'straight')) {
-                    const dx = pts[i].x - pts[i-1].x, dy = pts[i].y - pts[i-1].y;
+                    const dx = vx(pts[i]) - vx(pts[i-1]);
+                    const dy = vy(pts[i]) - vy(pts[i-1]);
                     const len = Math.sqrt(dx*dx + dy*dy) || 1;
                     const lnx = (dy / len) * treadHalf, lny = (-dx / len) * treadHalf;
                     this._strokeWheelPath(
-                        [[pts[i-1].x+lnx, pts[i-1].y+lny], [pts[i].x+lnx, pts[i].y+lny]],
+                        [[vx(pts[i-1])+lnx, vy(pts[i-1])+lny], [vx(pts[i])+lnx, vy(pts[i])+lny]],
                         `rgba(243,139,168,${alpha * 0.75})`, 1.5
                     );
                     this._strokeWheelPath(
-                        [[pts[i-1].x-lnx, pts[i-1].y-lny], [pts[i].x-lnx, pts[i].y-lny]],
+                        [[vx(pts[i-1])-lnx, vy(pts[i-1])-lny], [vx(pts[i])-lnx, vy(pts[i])-lny]],
                         `rgba(137,180,250,${alpha * 0.75})`, 1.5
                     );
                 }
@@ -173,7 +177,6 @@ class Renderer {
             const last = pts[pts.length - 1];
             if (anim.type === 'arc') {
                 const curT = anim.pathDist / anim.pathLen;
-                // Faint preview of full path
                 const full = this._arcSample(anim, treadHalf, 40, 1);
                 ctx.beginPath();
                 full.center.forEach(([cx,cy],j) =>
@@ -183,7 +186,6 @@ class Renderer {
                 ctx.lineWidth = 1.5;
                 ctx.stroke();
                 ctx.setLineDash([]);
-                // Solid traveled portion
                 const traveled = this._arcSample(anim, treadHalf, 40, curT);
                 ctx.beginPath();
                 traveled.center.forEach(([cx,cy],j) =>
@@ -195,10 +197,9 @@ class Renderer {
                     this._strokeWheelPath(traveled.left,  'rgba(243,139,168,0.85)', 1.5);
                     this._strokeWheelPath(traveled.right, 'rgba(137,180,250,0.85)', 1.5);
                 }
-
             } else {
                 ctx.beginPath();
-                ctx.moveTo(pxF(last.x), pyF(last.y));
+                ctx.moveTo(pxF(vx(last)), pyF(vy(last)));
                 ctx.lineTo(
                     padding + robot.visX * cellSize + cellSize/2,
                     padding + robot.visY * cellSize + cellSize/2
@@ -223,14 +224,17 @@ class Renderer {
         }
     }
 
-    // Sample arc path (entry straight + arc + exit straight) at N+1 points from pathT=0..maxT
+    // Sample arc path at N+1 points from pathT=0..maxT
     // Returns { center, left, right } each as arrays of [cellX, cellY]
     _arcSample(seg, treadHalf, N = 40, maxT = 1) {
         const { fromX, fromY, P_in, P_out, arcC, ev, rv,
                 fromAngle, toAngle, sign, R } = seg;
-        const totalLen = seg.totalLen ?? seg.pathLen;
-        const ef = (1 - R) / totalLen;
-        const af = (Math.PI * R / 2) / totalLen;
+        const totalLen  = seg.totalLen ?? seg.pathLen;
+        // Use stored per-phase lengths to handle both centre-arcs and boundary-arcs
+        const entryLen  = seg.entryLen ?? (1 - R);
+        const arcLenSeg = seg.arcLen   ?? (Math.PI * R / 2);
+        const ef = totalLen > 0 ? entryLen  / totalLen : 0;
+        const af = totalLen > 0 ? arcLenSeg / totalLen : 1;
         const diff = ((toAngle - fromAngle + 540) % 360) - 180;
         const center = [], left = [], right = [];
         const arm0x = P_in[0] - arcC[0], arm0y = P_in[1] - arcC[1];
@@ -248,14 +252,13 @@ class Renderer {
                 const cosPhi = Math.cos(phi), sinPhi = Math.sin(phi);
                 x = arcC[0] + arm0x * cosPhi - arm0y * sign * sinPhi;
                 y = arcC[1] + arm0x * sign * sinPhi + arm0y * cosPhi;
-                // heading: interpolate from ev to rv
                 const visA = fromAngle + diff * arcFrac;
                 const r = (visA - 90) * Math.PI / 180;
                 hx = Math.cos(r); hy = Math.sin(r);
             } else {
-                const exitFrac = (1 - ef - af) > 0 ? (pathT - ef - af) / (1 - ef - af) : 1;
-                x = lerp(P_out[0], seg.toX, exitFrac);
-                y = lerp(P_out[1], seg.toY, exitFrac);
+                const remFrac = (1 - ef - af) > 0 ? (pathT - ef - af) / (1 - ef - af) : 1;
+                x = lerp(P_out[0], seg.toX, remFrac);
+                y = lerp(P_out[1], seg.toY, remFrac);
                 hx = rv[0]; hy = rv[1];
             }
             return { x, y, hx, hy };
