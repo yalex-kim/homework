@@ -126,6 +126,11 @@ class Simulator {
         this._editor  = null;
         this._running = false;
         this._lastTime = 0;
+
+        // Lap timer: starts when robot leaves (1,1), stops at goal
+        this._lapState   = 'idle'; // 'idle' | 'at11' | 'timing'
+        this._lapStart   = 0;
+        this._lapHistory = [];     // sorted ascending (fastest first)
     }
 
     init() {
@@ -144,8 +149,13 @@ class Simulator {
         document.getElementById('btn-start').onclick    = () => this.start();
         document.getElementById('btn-stop').onclick     = () => this.stop();
         document.getElementById('btn-reset').onclick    = () => this.reset();
-        document.getElementById('btn-new-maze').onclick = () => this.newMaze();
-        document.getElementById('btn-default').onclick  = () => this._editor.setValue(DEFAULT_ALGORITHM);
+        document.getElementById('btn-new-maze').onclick   = () => this.newMaze();
+        document.getElementById('btn-default').onclick    = () => this._editor.setValue(DEFAULT_ALGORITHM);
+        document.getElementById('btn-clear-laps').onclick = () => {
+            this._lapHistory = [];
+            this._lapState   = 'idle';
+            this._updateLapDisplay();
+        };
 
         // Maze selector
         document.getElementById('maze-select').onchange = () => {
@@ -190,6 +200,7 @@ class Simulator {
             this.robot.update(dt);
             this.renderer.render();
             this._updateStatus();
+            this._checkLapTimer();
             requestAnimationFrame(loop);
         };
         requestAnimationFrame(loop);
@@ -211,6 +222,10 @@ class Simulator {
         this.renderer.updateRobot(this.robot);
         this.renderer.updateFloodFill(this.ff);
         this._setStatus('준비', 'idle');
+        // Clear lap history on new maze
+        this._lapHistory = [];
+        this._lapState   = 'idle';
+        this._updateLapDisplay();
     }
 
     async start() {
@@ -251,6 +266,9 @@ class Simulator {
             this.robot.reset();
             this.ff = new FloodFill(this.maze, this.hardware);
             this.renderer.updateFloodFill(this.ff);
+            this._lapState = 'idle';
+            document.getElementById('lap-live').textContent = '대기 중';
+            document.getElementById('lap-live').className   = '';
             this._setStatus('준비', 'idle');
         }, 80);
     }
@@ -306,6 +324,53 @@ class Simulator {
         document.getElementById('stat-odo').textContent  = `${r.odometer}칸`;
         document.getElementById('stat-gyro').textContent = `${r._gyroVelocity.toFixed(1)}°/s`;
         document.getElementById('stat-time').textContent = `${r.elapsedTime.toFixed(2)}s`;
+    }
+
+    // ── Lap timer ────────────────────────────────────────────────────────────
+
+    _checkLapTimer() {
+        const r   = this.robot;
+        const el  = document.getElementById('lap-live');
+
+        if (this._lapState === 'idle') {
+            if (r.x === 1 && r.y === 1) {
+                this._lapState = 'at11';
+            }
+        } else if (this._lapState === 'at11') {
+            if (r.x !== 1 || r.y !== 1) {
+                this._lapState = 'timing';
+                this._lapStart = r.elapsedTime;
+                el.className   = 'timing';
+                el.textContent = '0.000s';
+            }
+        } else if (this._lapState === 'timing') {
+            const cur = r.elapsedTime - this._lapStart;
+            el.textContent = cur.toFixed(3) + 's';
+            if (r.atGoal) {
+                this._lapHistory.push(cur);
+                this._lapHistory.sort((a, b) => a - b);
+                this._lapState     = 'idle';
+                el.className       = 'done';
+                el.textContent     = cur.toFixed(3) + 's ✓';
+                this._updateLapDisplay();
+            }
+        }
+    }
+
+    _updateLapDisplay() {
+        const list = document.getElementById('lap-list');
+        if (!list) return;
+        if (this._lapHistory.length === 0) {
+            list.innerHTML = '<div class="lap-empty">기록 없음</div>';
+            return;
+        }
+        list.innerHTML = this._lapHistory.map((t, i) => `
+            <div class="lap-entry ${i === 0 ? 'rank-1' : ''}">
+                <span class="lap-rank">#${i + 1}</span>
+                <span class="lap-time">${t.toFixed(3)}s</span>
+                ${i === 0 ? '<span class="lap-badge">★</span>' : ''}
+            </div>
+        `).join('');
     }
 }
 
