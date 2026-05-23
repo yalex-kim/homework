@@ -48,6 +48,30 @@ console.log(\`Phase 2 완료: \${robot.odometer}칸 / \${robot.elapsedTime.toFix
 // ── Phase 3: 최적 경로 속도 주행 ─────────────────────────────────────────────
 ff.setGoals([[7,7],[8,7],[7,8],[8,8]]);
 steps = 0;
+
+// Detect alternating R-L or L-R turn pattern (diagonal driving opportunity).
+// Returns { pairs, firstSign } if ≥1 complete alternating pair found, else null.
+function detectDiag(x, y, curFacing) {
+    const AMAP = {n:0, e:90, s:180, w:270};
+    let cx = x, cy = y, cur = curFacing;
+    const turns = [];
+    for (let i = 0; i < 16; i++) {
+        const nd = ff.bestDir(cx, cy, cur);
+        if (!nd || nd === cur) break;
+        const diff = ((AMAP[nd] - AMAP[cur]) + 360) % 360;
+        if (diff !== 90 && diff !== 270) break;
+        turns.push(diff === 90 ? 1 : -1);
+        cx += DX[nd]; cy += DY[nd]; cur = nd;
+    }
+    if (turns.length < 2 || turns[0] === turns[1]) return null;
+    let pairs = 0;
+    for (let i = 0; i + 1 < turns.length; i += 2) {
+        if (turns[i] === turns[0] && turns[i+1] === -turns[0]) pairs++;
+        else break;
+    }
+    return pairs >= 1 ? { pairs, firstSign: turns[0] } : null;
+}
+
 while (!robot.atGoal && steps++ < 3000) {
     const dir = ff.bestDir(robot.x, robot.y, facing());
     if (!dir) { console.log('경로 없음!'); break; }
@@ -65,7 +89,14 @@ while (!robot.atGoal && steps++ < 3000) {
         }
         await (cnt >= 2 ? robot.moveForwardFast(cnt) : robot.moveTo(dir));
     } else {
-        await robot.moveTo(dir);
+        // 방향 전환 — 대각선 패턴 감지 후 대각선 주행 시도
+        const diag = detectDiag(robot.x, robot.y, facing());
+        if (diag) {
+            const ok = await robot.moveDiag(diag.pairs, diag.firstSign);
+            if (!ok) await robot.moveTo(dir);
+        } else {
+            await robot.moveTo(dir);
+        }
     }
 }
 

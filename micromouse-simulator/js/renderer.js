@@ -152,6 +152,18 @@ class Renderer {
                 if (this.showWheels) {
                     this._drawPivotWheelTracks(seg, treadHalf, alpha);
                 }
+            } else if (seg && seg.type === 'diag') {
+                const { center, left, right } = this._diagSample(seg, treadHalf);
+                ctx.beginPath();
+                center.forEach(([cx,cy], j) =>
+                    j===0 ? ctx.moveTo(pxF(cx),pyF(cy)) : ctx.lineTo(pxF(cx),pyF(cy)));
+                ctx.strokeStyle = `rgba(166,227,161,${alpha})`;
+                ctx.lineWidth = 2;
+                ctx.stroke();
+                if (this.showWheels) {
+                    this._strokeWheelPath(left,  `rgba(243,139,168,${alpha * 0.75})`, 1.5);
+                    this._strokeWheelPath(right, `rgba(137,180,250,${alpha * 0.75})`, 1.5);
+                }
             } else {
                 ctx.beginPath();
                 ctx.moveTo(pxF(vx(pts[i-1])), pyF(vy(pts[i-1])));
@@ -210,6 +222,28 @@ class Renderer {
                 if (this.showWheels) {
                     this._strokeWheelPath(traveled.left,  'rgba(243,139,168,0.85)', 1.5);
                     this._strokeWheelPath(traveled.right, 'rgba(137,180,250,0.85)', 1.5);
+                }
+            } else if (anim.type === 'diag') {
+                const curT = anim.pathDist / anim.pathLen;
+                const full = this._diagSample(anim, treadHalf, 40, 1);
+                ctx.beginPath();
+                full.center.forEach(([cx,cy],j) =>
+                    j===0 ? ctx.moveTo(pxF(cx),pyF(cy)) : ctx.lineTo(pxF(cx),pyF(cy)));
+                ctx.strokeStyle = 'rgba(166,227,161,0.18)';
+                ctx.setLineDash([3, 4]);
+                ctx.lineWidth = 1.5;
+                ctx.stroke();
+                ctx.setLineDash([]);
+                const travDiag = this._diagSample(anim, treadHalf, 40, curT);
+                ctx.beginPath();
+                travDiag.center.forEach(([cx,cy],j) =>
+                    j===0 ? ctx.moveTo(pxF(cx),pyF(cy)) : ctx.lineTo(pxF(cx),pyF(cy)));
+                ctx.strokeStyle = 'rgba(166,227,161,0.85)';
+                ctx.lineWidth = 2;
+                ctx.stroke();
+                if (this.showWheels) {
+                    this._strokeWheelPath(travDiag.left,  'rgba(243,139,168,0.85)', 1.5);
+                    this._strokeWheelPath(travDiag.right, 'rgba(137,180,250,0.85)', 1.5);
                 }
             } else {
                 ctx.beginPath();
@@ -321,6 +355,63 @@ class Renderer {
             left.push( [x + ty  * treadHalf, y - tx * treadHalf]);
             right.push([x - ty  * treadHalf, y + tx * treadHalf]);
         }
+        return { center, left, right };
+    }
+
+    // Sample diagonal path (entry arc + diagonal straight + exit arc) at N+1 points.
+    // Returns { center, left, right } each as arrays of [cellX, cellY].
+    _diagSample(seg, treadHalf, N = 40, maxT = 1) {
+        const { fromX, fromY, arcC1, P_mid, P_exit_start, arcC2,
+                fromAngle, midAngle, sign,
+                arcLen1, straightLen, arcLen2, pathLen } = seg;
+        const f1 = pathLen > 0 ? arcLen1 / pathLen : 0;
+        const f2 = pathLen > 0 ? (arcLen1 + straightLen) / pathLen : 1;
+        const exitSign = -sign;
+
+        const arm0x = fromX - arcC1[0], arm0y = fromY - arcC1[1];
+        const armEx = P_exit_start[0] - arcC2[0], armEy = P_exit_start[1] - arcC2[1];
+
+        const hvec = (a) => {
+            const r = (a - 90) * Math.PI / 180;
+            return [Math.cos(r), Math.sin(r)];
+        };
+
+        const center = [], left = [], right = [];
+
+        for (let i = 0; i <= N; i++) {
+            const t = (i / N) * maxT;
+            let x, y, hx, hy;
+
+            if (t <= f1) {
+                const arcFrac = f1 > 0 ? t / f1 : 1;
+                const phi = arcFrac * Math.PI / 4;
+                const c = Math.cos(phi), s = Math.sin(phi);
+                x = arcC1[0] + arm0x*c - arm0y*sign*s;
+                y = arcC1[1] + arm0x*sign*s + arm0y*c;
+                [hx, hy] = hvec(fromAngle + sign * 45 * arcFrac);
+            } else if (t <= f2) {
+                const span = f2 - f1;
+                const frac = span > 0 ? (t - f1) / span : 1;
+                x = lerp(P_mid[0], P_exit_start[0], frac);
+                y = lerp(P_mid[1], P_exit_start[1], frac);
+                [hx, hy] = hvec(midAngle);
+            } else {
+                const span = 1 - f2;
+                const frac = span > 0 ? (t - f2) / span : 1;
+                const phi = frac * Math.PI / 4;
+                const c = Math.cos(phi), s = Math.sin(phi);
+                x = arcC2[0] + armEx*c - armEy*exitSign*s;
+                y = arcC2[1] + armEx*exitSign*s + armEy*c;
+                [hx, hy] = hvec(midAngle + exitSign * 45 * frac);
+            }
+
+            const len = Math.sqrt(hx*hx + hy*hy) || 1;
+            const tx = hx/len, ty = hy/len;
+            center.push([x, y]);
+            left.push( [x + ty  * treadHalf, y - tx * treadHalf]);
+            right.push([x - ty  * treadHalf, y + tx * treadHalf]);
+        }
+
         return { center, left, right };
     }
 

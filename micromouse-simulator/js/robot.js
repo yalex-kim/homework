@@ -80,6 +80,7 @@ class Robot {
         if      (m.type === 'straight') this._stepStraight(m);
         else if (m.type === 'pivot')    this._stepPivot(m);
         else if (m.type === 'arc')      this._stepArc(m);
+        else if (m.type === 'diag')     this._stepDiag(m);
     }
 
     update(dtMs) {
@@ -355,6 +356,161 @@ class Robot {
         };
     }
 
+    // Diagonal arc-straight-arc: replaces n consecutive R-L (or L-R) turns with one
+    // smooth motion.  firstSign=+1 → R-L (NE/SE/…), firstSign=-1 → L-R (NW/SW/…).
+    // R_d=0.15: small 45° entry/exit arc radius; diagonal straight fills the rest.
+    _buildDiagMotion(pairs, firstSign) {
+        const DX = [0,1,0,-1], DY = [-1,0,1,0], DIRS = ['n','e','s','w'];
+        const di  = ((Math.round(this.angle / 90)) % 4 + 4) % 4;
+        const di2 = ((di + (firstSign > 0 ? 1 : 3)) % 4);
+        const dx2 = DX[di2], dy2 = DY[di2];
+        const dx1 = DX[di],  dy1 = DY[di];
+        const dx_c = dx1 + dx2, dy_c = dy1 + dy2;
+
+        // Wall check for each pair
+        for (let k = 0; k < pairs; k++) {
+            const sx = this.x + k * dx_c, sy = this.y + k * dy_c;
+            if (sx < 0 || sx >= this.maze.width || sy < 0 || sy >= this.maze.height) return null;
+            if (this.maze.hasWall(sx, sy, DIRS[di2])) return null;
+            const bx = sx + dx2, by = sy + dy2;
+            if (bx < 0 || bx >= this.maze.width || by < 0 || by >= this.maze.height) return null;
+            if (this.maze.hasWall(bx, by, DIRS[di])) return null;
+        }
+
+        const hw  = this.hw;
+        const R_d = 0.15;
+        const r_m   = hw ? Math.min(hw.smoothRadius, hw.cellSize * 0.45) : 0.045;
+        const vTurn = hw ? Math.min(Math.sqrt(9.8 * r_m), hw.maxSpeed) : 0.5;
+        const vArc  = hw ? vTurn / hw.cellSize : 2.0;
+
+        const vec = (a) => { const r = (a - 90) * Math.PI / 180; return [Math.cos(r), Math.sin(r)]; };
+        const ev  = vec(this.angle);
+        const s45 = Math.SQRT1_2, c45 = Math.SQRT1_2;
+
+        // Entry 45° arc: fromAngle → midAngle
+        const arcC1 = [
+            this.visX + firstSign * (-ev[1]) * R_d,
+            this.visY + firstSign *   ev[0]  * R_d,
+        ];
+        const arm01 = [this.visX - arcC1[0], this.visY - arcC1[1]];
+        const P_mid = [
+            arcC1[0] + arm01[0]*c45 - arm01[1]*firstSign*s45,
+            arcC1[1] + arm01[0]*firstSign*s45 + arm01[1]*c45,
+        ];
+        const midAngle = (this.angle + firstSign * 45 + 360) % 360;
+
+        // Visual / logical destination
+        const toX    = this.x    + pairs * dx_c;
+        const toY    = this.y    + pairs * dy_c;
+        const visToX = this.visX + pairs * dx_c;
+        const visToY = this.visY + pairs * dy_c;
+
+        // Exit arc start (symmetric to entry arc delta)
+        const dPx = P_mid[0] - this.visX, dPy = P_mid[1] - this.visY;
+        const P_exit_start = [visToX - dPx, visToY - dPy];
+
+        // Exit arc center: midAngle → fromAngle, sign = -firstSign
+        const evMid = vec(midAngle);
+        const arcC2 = [
+            P_exit_start[0] + (-firstSign) * (-evMid[1]) * R_d,
+            P_exit_start[1] + (-firstSign) *   evMid[0]  * R_d,
+        ];
+
+        const sdx = P_exit_start[0] - P_mid[0], sdy = P_exit_start[1] - P_mid[1];
+        const straightLen = Math.sqrt(sdx*sdx + sdy*sdy);
+        if (straightLen < 1e-6) return null;
+
+        const arcLen  = R_d * Math.PI / 4;
+        const pathLen = arcLen + straightLen + arcLen;
+
+        return {
+            type: 'diag',
+            fromX: this.visX, fromY: this.visY,
+            fromLogX: this.x, fromLogY: this.y,
+            toX, toY, visToX, visToY,
+            dx_c, dy_c, dx2, dy2,
+            arcC1, P_mid, P_exit_start, arcC2,
+            fromAngle: this.angle, midAngle, toAngle: this.angle,
+            sign: firstSign, R_d,
+            arcLen1: arcLen, straightLen, arcLen2: arcLen,
+            pathLen, pathDist: 0, vArc,
+            diagPairs: pairs,
+        };
+    }
+
+    _stepDiag(m) {
+        m.pathDist = Math.min(m.pathDist + m.vArc * CTRL_DT, m.pathLen);
+        const d = m.pathDist;
+        const { arcLen1, straightLen, arcLen2, arcC1, arcC2, P_mid, P_exit_start,
+                fromAngle, midAngle, sign, R_d } = m;
+
+        if (d <= arcLen1) {
+            const frac = d / arcLen1;
+            const phi  = frac * Math.PI / 4;
+            const ax = m.fromX - arcC1[0], ay = m.fromY - arcC1[1];
+            const c = Math.cos(phi), s = Math.sin(phi);
+            this.visX = arcC1[0] + ax*c - ay*sign*s;
+            this.visY = arcC1[1] + ax*sign*s + ay*c;
+            this.visAngle = fromAngle + sign * 45 * frac;
+            this._gyroVelocity = sign * (m.vArc / R_d) * (180 / Math.PI);
+        } else if (d <= arcLen1 + straightLen) {
+            const t = (d - arcLen1) / straightLen;
+            this.visX = lerp(P_mid[0], P_exit_start[0], t);
+            this.visY = lerp(P_mid[1], P_exit_start[1], t);
+            this.visAngle = midAngle;
+            this._gyroVelocity = 0;
+        } else {
+            const exitSign = -sign;
+            const frac = (d - arcLen1 - straightLen) / arcLen2;
+            const phi  = frac * Math.PI / 4;
+            const ax = P_exit_start[0] - arcC2[0], ay = P_exit_start[1] - arcC2[1];
+            const c = Math.cos(phi), s = Math.sin(phi);
+            this.visX = arcC2[0] + ax*c - ay*exitSign*s;
+            this.visY = arcC2[1] + ax*exitSign*s + ay*c;
+            this.visAngle = midAngle + exitSign * 45 * frac;
+            this._gyroVelocity = exitSign * (m.vArc / R_d) * (180 / Math.PI);
+        }
+        this._gyroHeading += this._gyroVelocity * CTRL_DT;
+        if (m.pathDist >= m.pathLen - 1e-9) this._finishDiag(m);
+    }
+
+    _finishDiag(m) {
+        this.x = m.toX; this.y = m.toY;
+        this.angle    = m.fromAngle;
+        this.visX     = m.visToX; this.visY = m.visToY;
+        this.visAngle = m.fromAngle;
+        this._gyroVelocity = 0;
+        this._atBoundary = true;
+
+        // Mark all traversed cells explored (B and C cells for each pair)
+        for (let k = 0; k < m.diagPairs; k++) {
+            const bx = m.fromLogX + m.dx2 + k * m.dx_c;
+            const by = m.fromLogY + m.dy2 + k * m.dy_c;
+            if (bx >= 0 && bx < this.maze.width && by >= 0 && by < this.maze.height)
+                this.maze.explored[by][bx] = true;
+            const cx_ = m.fromLogX + (k + 1) * m.dx_c;
+            const cy_ = m.fromLogY + (k + 1) * m.dy_c;
+            if (cx_ >= 0 && cx_ < this.maze.width && cy_ >= 0 && cy_ < this.maze.height)
+                this.maze.explored[cy_][cx_] = true;
+        }
+        this.odometer += m.diagPairs * 2;
+        this.path.push({
+            x: this.x, y: this.y,
+            visX: this.visX, visY: this.visY,
+            seg: {
+                type: 'diag',
+                fromX: m.fromX, fromY: m.fromY,
+                arcC1: m.arcC1, P_mid: m.P_mid,
+                P_exit_start: m.P_exit_start, arcC2: m.arcC2,
+                fromAngle: m.fromAngle, midAngle: m.midAngle,
+                sign: m.sign, R_d: m.R_d,
+                arcLen1: m.arcLen1, straightLen: m.straightLen, arcLen2: m.arcLen2,
+                pathLen: m.pathLen,
+            },
+        });
+        this._finishMotion();
+    }
+
     // ── Public motion API ─────────────────────────────────────────────────────
 
     // Move forward.
@@ -416,6 +572,16 @@ class Robot {
             decel: hw ? hw.decel   / hw.cellSize : 9.0,
             multiCell: actualCells,
         });
+        return true;
+    }
+
+    // Diagonal drive: replaces `pairs` consecutive R-L (firstSign=+1) or L-R (firstSign=-1)
+    // turns with one smooth entry-arc + diagonal-straight + exit-arc motion.
+    async moveDiag(pairs, firstSign) {
+        if (this._stopped) throw new StopError();
+        const m = this._buildDiagMotion(pairs, firstSign);
+        if (!m) return false;
+        await this._startMotion(m);
         return true;
     }
 
