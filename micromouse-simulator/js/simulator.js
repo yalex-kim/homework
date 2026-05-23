@@ -7,12 +7,17 @@ const DEFAULT_ALGORITHM =
 //   ff     — FloodFill 인스턴스 (역방향 시간 추산)
 //
 // 주요 API:
-//   ff.sense(robot)                  → 센서 읽어 벽 지식 업데이트 + 재계산
-//   ff.bestDir(x, y, facing)         → turn penalty 반영 최적 방향 반환
-//   ff.getDistMap()[y][x]            → 각 셀의 목표까지 추산 비용
+//   ff.sense(robot)                      → 센서 읽어 벽 지식 업데이트 + 재계산
+//   ff.bestDir(x, y, facing)             → turn penalty 반영 최적 방향 반환
+//   ff.getDistMap()[y][x]                → 각 셀의 목표까지 추산 비용
 //   await robot.moveTo('n'|'e'|'s'|'w')  → 절대 방향으로 이동 (smooth/pivot 자동)
-//   robot.sensors.gyro               → 자이로 각속도 (°/s)
-//   robot.elapsedTime                → 누적 물리 시간 (초)
+//   robot.sensors.gyro                   → 자이로 각속도 (°/s)
+//   robot.elapsedTime                    → 누적 물리 시간 (초)
+//
+// 경계선 감지 모델:
+//   moveTo() 는 블럭 경계선(블럭 중심에서 0.5칸)에서 멈추고 제어를 반환합니다.
+//   그 시점에 robot.x/y 는 새 셀로 업데이트되고, sensors 는 새 셀의 벽을 읽습니다.
+//   따라서 ff.sense() / ff.bestDir() 는 항상 경계선에서 호출됩니다.
 
 function facing() {
     return ['n','e','s','w'][((Math.round(robot.angle / 90)) % 4 + 4) % 4];
@@ -20,14 +25,14 @@ function facing() {
 
 let steps = 0;
 while (!robot.atGoal && steps++ < 3000) {
-    // 벽 감지 → 플러드 필 업데이트 (변화 있을 때만 재계산)
+    // 경계선 도착 시 벽 감지 → 플러드 필 업데이트
     ff.sense(robot);
 
     // turn penalty를 반영한 최적 이동 방향 계산
     const dir = ff.bestDir(robot.x, robot.y, facing());
     if (!dir) { console.log('경로 없음!'); break; }
 
-    // smooth turn(원호) 또는 pivot turn 자동 선택하여 이동
+    // 다음 경계선까지 이동 (smooth turn 또는 pivot turn 자동 선택)
     await robot.moveTo(dir);
 }`;
 
