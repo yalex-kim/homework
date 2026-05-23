@@ -144,23 +144,6 @@ class Renderer {
                     this._strokeWheelPath(left,  `rgba(243,139,168,${alpha * 0.75})`, 1.5);
                     this._strokeWheelPath(right, `rgba(137,180,250,${alpha * 0.75})`, 1.5);
                 }
-            } else if (seg && seg.type === 'bezier' && seg.cp) {
-                const cp = seg.cp;
-                ctx.beginPath();
-                ctx.moveTo(pxF(cp[0][0]), pyF(cp[0][1]));
-                ctx.bezierCurveTo(
-                    pxF(cp[1][0]), pyF(cp[1][1]),
-                    pxF(cp[2][0]), pyF(cp[2][1]),
-                    pxF(cp[3][0]), pyF(cp[3][1])
-                );
-                ctx.strokeStyle = `rgba(249,226,175,${alpha})`;
-                ctx.lineWidth = 2;
-                ctx.stroke();
-                if (this.showWheels) {
-                    const { left, right } = this._wheelPtsBezier(cp, treadHalf);
-                    this._strokeWheelPath(left,  `rgba(243,139,168,${alpha * 0.75})`, 1.5);
-                    this._strokeWheelPath(right, `rgba(137,180,250,${alpha * 0.75})`, 1.5);
-                }
             } else {
                 ctx.beginPath();
                 ctx.moveTo(pxF(pts[i-1].x), pyF(pts[i-1].y));
@@ -168,7 +151,7 @@ class Renderer {
                 ctx.strokeStyle = `rgba(249,226,175,${alpha})`;
                 ctx.lineWidth = 2;
                 ctx.stroke();
-                if (this.showWheels && seg && seg.type === 'move') {
+                if (this.showWheels && seg && (seg.type === 'move' || seg.type === 'straight')) {
                     const dx = pts[i].x - pts[i-1].x, dy = pts[i].y - pts[i-1].y;
                     const len = Math.sqrt(dx*dx + dy*dy) || 1;
                     const lnx = (dy / len) * treadHalf, lny = (-dx / len) * treadHalf;
@@ -184,12 +167,12 @@ class Renderer {
             }
         }
 
-        // ─ Current animation segment ──────────────────────────────────────────
-        const anim = robot._anim;
+        // ─ Current motion segment ─────────────────────────────────────────────
+        const anim = robot._motion;
         if (anim) {
             const last = pts[pts.length - 1];
             if (anim.type === 'arc') {
-                const curT = anim.progress;  // raw progress — matches update() arc handler
+                const curT = anim.pathDist / anim.pathLen;
                 // Faint preview of full path
                 const full = this._arcSample(anim, treadHalf, 40, 1);
                 ctx.beginPath();
@@ -213,38 +196,6 @@ class Renderer {
                     this._strokeWheelPath(traveled.right, 'rgba(137,180,250,0.85)', 1.5);
                 }
 
-            } else if (anim.type === 'bezier' && anim.cp) {
-                const cp = anim.cp;
-                const [x0,y0] = [pxF(cp[0][0]), pyF(cp[0][1])];
-                const [x1,y1] = [pxF(cp[1][0]), pyF(cp[1][1])];
-                const [x2,y2] = [pxF(cp[2][0]), pyF(cp[2][1])];
-                const [x3,y3] = [pxF(cp[3][0]), pyF(cp[3][1])];
-                ctx.beginPath();
-                ctx.moveTo(x0, y0);
-                ctx.bezierCurveTo(x1, y1, x2, y2, x3, y3);
-                ctx.strokeStyle = 'rgba(249,226,175,0.18)';
-                ctx.setLineDash([3, 4]);
-                ctx.lineWidth = 1.5;
-                ctx.stroke();
-                ctx.setLineDash([]);
-                const curT = easeInOut(anim.progress);
-                const sub = this._bezierLeft(cp, curT);
-                ctx.beginPath();
-                ctx.moveTo(pxF(sub[0][0]), pyF(sub[0][1]));
-                ctx.bezierCurveTo(
-                    pxF(sub[1][0]), pyF(sub[1][1]),
-                    pxF(sub[2][0]), pyF(sub[2][1]),
-                    pxF(sub[3][0]), pyF(sub[3][1])
-                );
-                ctx.strokeStyle = 'rgba(249,226,175,0.85)';
-                ctx.lineWidth = 2;
-                ctx.stroke();
-                if (this.showWheels) {
-                    const { left, right } = this._wheelPtsBezier(cp, treadHalf, 28, curT);
-                    this._strokeWheelPath(left,  'rgba(243,139,168,0.85)', 1.5);
-                    this._strokeWheelPath(right, 'rgba(137,180,250,0.85)', 1.5);
-                }
-
             } else {
                 ctx.beginPath();
                 ctx.moveTo(pxF(last.x), pyF(last.y));
@@ -255,11 +206,9 @@ class Renderer {
                 ctx.strokeStyle = 'rgba(249,226,175,0.85)';
                 ctx.lineWidth = 2;
                 ctx.stroke();
-                if (this.showWheels && anim.type === 'move') {
-                    const dx = anim.toX - anim.fromX, dy = anim.toY - anim.fromY;
-                    const len = Math.sqrt(dx*dx + dy*dy) || 1;
-                    const lnx = (dy / len) * treadHalf, lny = (-dx / len) * treadHalf;
-                    const fx = anim.fromX, fy = anim.fromY;
+                if (this.showWheels && anim.type === 'straight') {
+                    const lnx = anim.dy * treadHalf, lny = -anim.dx * treadHalf;
+                    const fx = anim.x0, fy = anim.y0;
                     const tx = robot.visX, ty = robot.visY;
                     this._strokeWheelPath(
                         [[fx+lnx, fy+lny], [tx+lnx, ty+lny]],
@@ -278,7 +227,8 @@ class Renderer {
     // Returns { center, left, right } each as arrays of [cellX, cellY]
     _arcSample(seg, treadHalf, N = 40, maxT = 1) {
         const { fromX, fromY, P_in, P_out, arcC, ev, rv,
-                fromAngle, toAngle, sign, R, totalLen } = seg;
+                fromAngle, toAngle, sign, R } = seg;
+        const totalLen = seg.totalLen ?? seg.pathLen;
         const ef = (1 - R) / totalLen;
         const af = (Math.PI * R / 2) / totalLen;
         const diff = ((toAngle - fromAngle + 540) % 360) - 180;
