@@ -39,8 +39,8 @@ label.sl{font-size:11px;color:var(--muted);white-space:nowrap;}
 #canvas-area{flex:1;display:flex;flex-direction:column;overflow:hidden;background:var(--bg);}
 #maze-wrap{flex:1;display:flex;align-items:center;justify-content:center;padding:8px;overflow:hidden;}
 #maze-wrap canvas{background:var(--bg);border:1px solid var(--border);border-radius:6px;display:block;}
-#graph-wrap{height:158px;flex-shrink:0;border-top:1px solid var(--border);padding:4px 8px 4px;}
-#graph-wrap canvas{display:block;background:var(--bg);}
+#graph-wrap{height:158px;flex-shrink:0;border-top:1px solid var(--border);}
+#graph-wrap canvas{display:block;width:100%;height:100%;background:var(--bg);}
 </style>
 </head>
 <body>
@@ -292,9 +292,9 @@ function resizeCanvas() {
   const sz = Math.min(wrap.clientWidth - 24, wrap.clientHeight - 24);
   cv.width = cv.height = Math.max(sz, 200);
 
-  const gw = document.getElementById('graph-wrap');
-  gc.width  = Math.max(gw.clientWidth,  300);
-  gc.height = Math.max(gw.clientHeight, 80);
+  // CSS sets width:100%;height:100% on gc — read rendered size as attribute resolution
+  gc.width  = Math.max(gc.offsetWidth,  400);
+  gc.height = Math.max(gc.offsetHeight, 140);
 }
 
 function makeTransform(C, isLeft) {
@@ -866,8 +866,8 @@ SLIDERS.forEach(([sid, vid, dec]) => {
 
 window.addEventListener('resize', () => { resizeCanvas(); draw(); });
 
-resizeCanvas();
-draw();
+// Defer initial draw to ensure flex layout is fully computed
+requestAnimationFrame(() => { resizeCanvas(); draw(); });
 </script>
 </body>
 </html>
