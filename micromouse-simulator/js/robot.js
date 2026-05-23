@@ -117,8 +117,15 @@ class Robot {
         this.visY = m.y0 + m.dy * m.dist1;
 
         if (m.toCenter) {
-            // Half-step to cell centre before a pivot: no path entry, no odometer
             this._atBoundary = false;
+            if (m.toCenterRecord) {
+                // Record center waypoint for path visualization (no odometer, no explored update)
+                this.path.push({
+                    x: this.x, y: this.y,
+                    visX: this.visX, visY: this.visY,
+                    seg: {type: 'move'},
+                });
+            }
         } else {
             // Normal boundary arrival
             this._atBoundary = true;
@@ -154,6 +161,18 @@ class Robot {
         this.angle    = m.toAngle;
         this.visAngle = m.toAngle;
         this._gyroVelocity = 0;
+        if (m.recordInPath) {
+            this.path.push({
+                x: this.x, y: this.y,
+                visX: this.visX, visY: this.visY,
+                seg: {
+                    type: 'pivot',
+                    cx: this.visX, cy: this.visY,
+                    fromAngle: m.fromAngle, toAngle: m.toAngle,
+                    sign: m.sign, totalAngle: m.totalAngle,
+                },
+            });
+        }
         this._finishMotion();
     }
 
@@ -354,7 +373,8 @@ class Robot {
     }
 
     // Advance 0.5 cells to cell centre (used before a pivot when _atBoundary=true).
-    async _advanceToCenter() {
+    // record=true: push a path waypoint at the centre so the half-step is visible.
+    async _advanceToCenter(record = false) {
         const DX = [0,1,0,-1], DY = [-1,0,1,0];
         const di = ((Math.round(this.angle / 90)) % 4 + 4) % 4;
         const hw = this.hw;
@@ -366,11 +386,11 @@ class Robot {
             vMax:  hw ? hw.maxSpeed / hw.cellSize : 3.0,
             accel: hw ? hw.accel   / hw.cellSize : 9.0,
             decel: hw ? hw.decel   / hw.cellSize : 9.0,
-            toCenter: true,   // suppresses path-history entry; sets _atBoundary=false
+            toCenter: true, toCenterRecord: record,
         });
     }
 
-    async turnLeft(deg = 90) {
+    async turnLeft(deg = 90, recordInPath = false) {
         if (this._stopped) throw new StopError();
         const hw = this.hw;
         await this._startMotion({
@@ -380,11 +400,11 @@ class Robot {
             sign: -1, totalAngle: deg, angleDone: 0, omega: 0,
             maxOmega: hw ? hw.maxOmega   : 360,
             alpha:    hw ? hw.alphaOmega : 720,
+            recordInPath,
         });
-        // this.angle set by _finishPivot
     }
 
-    async turnRight(deg = 90) {
+    async turnRight(deg = 90, recordInPath = false) {
         if (this._stopped) throw new StopError();
         const hw = this.hw;
         await this._startMotion({
@@ -394,8 +414,8 @@ class Robot {
             sign: +1, totalAngle: deg, angleDone: 0, omega: 0,
             maxOmega: hw ? hw.maxOmega   : 360,
             alpha:    hw ? hw.alphaOmega : 720,
+            recordInPath,
         });
-        // this.angle set by _finishPivot
     }
 
     async smoothTurnRight() {
@@ -443,8 +463,8 @@ class Robot {
             }
 
             // U-turn: half-block forward → 180° pivot → half-block forward
-            if (this._atBoundary) await this._advanceToCenter();
-            await this.turnRight(180);
+            if (this._atBoundary) await this._advanceToCenter(true);
+            await this.turnRight(180, true);
             return await this.moveForward();
 
         } else {

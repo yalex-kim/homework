@@ -147,6 +147,11 @@ class Renderer {
                     this._strokeWheelPath(left,  `rgba(243,139,168,${alpha * 0.75})`, 1.5);
                     this._strokeWheelPath(right, `rgba(137,180,250,${alpha * 0.75})`, 1.5);
                 }
+            } else if (seg && seg.type === 'pivot') {
+                // Pivot in place — no center line; just wheel arcs
+                if (this.showWheels) {
+                    this._drawPivotWheelTracks(seg, treadHalf, alpha);
+                }
             } else {
                 ctx.beginPath();
                 ctx.moveTo(pxF(vx(pts[i-1])), pyF(vy(pts[i-1])));
@@ -175,7 +180,16 @@ class Renderer {
         const anim = robot._motion;
         if (anim) {
             const last = pts[pts.length - 1];
-            if (anim.type === 'arc') {
+            if (anim.type === 'pivot') {
+                if (this.showWheels && anim.angleDone > 0) {
+                    this._drawPivotWheelTracks({
+                        cx: robot.visX, cy: robot.visY,
+                        fromAngle: anim.fromAngle,
+                        totalAngle: anim.angleDone,
+                        sign: anim.sign,
+                    }, treadHalf, 0.85);
+                }
+            } else if (anim.type === 'arc') {
                 const curT = anim.pathDist / anim.pathLen;
                 const full = this._arcSample(anim, treadHalf, 40, 1);
                 ctx.beginPath();
@@ -222,6 +236,39 @@ class Renderer {
                 }
             }
         }
+    }
+
+    // Draw left/right wheel arcs for an in-place pivot segment.
+    // seg: { cx, cy, fromAngle, totalAngle, sign }
+    _drawPivotWheelTracks(seg, treadHalf, alpha) {
+        const { ctx, cellSize, padding } = this;
+        const pxF = (cx) => padding + cx * cellSize + cellSize/2;
+        const pyF = (cy) => padding + cy * cellSize + cellSize/2;
+
+        const { cx, cy, fromAngle, totalAngle, sign } = seg;
+        const r = treadHalf * cellSize;
+        // headRad: canvas angle pointing in the robot's heading direction
+        const headRad  = (fromAngle - 90) * Math.PI / 180;
+        const sweepRad = totalAngle * Math.PI / 180;
+        const acw      = sign < 0;
+
+        // Left wheel (pink): perpendicular left = headRad - π/2
+        ctx.beginPath();
+        ctx.arc(pxF(cx), pyF(cy), r,
+            headRad - Math.PI/2,
+            headRad - Math.PI/2 + sign * sweepRad, acw);
+        ctx.strokeStyle = `rgba(243,139,168,${alpha * 0.75})`;
+        ctx.lineWidth = 1.5;
+        ctx.stroke();
+
+        // Right wheel (blue): perpendicular right = headRad + π/2
+        ctx.beginPath();
+        ctx.arc(pxF(cx), pyF(cy), r,
+            headRad + Math.PI/2,
+            headRad + Math.PI/2 + sign * sweepRad, acw);
+        ctx.strokeStyle = `rgba(137,180,250,${alpha * 0.75})`;
+        ctx.lineWidth = 1.5;
+        ctx.stroke();
     }
 
     // Sample arc path at N+1 points from pathT=0..maxT
