@@ -113,7 +113,7 @@ class Simulator {
         this.maze     = new Maze();
         this.hardware = new HardwareProfile();
         this.robot    = new Robot(this.maze, this.hardware);
-        this.robot.speed = 3;
+        this.robot.speed = 1;
         this.ff       = new FloodFill(this.maze, this.hardware);
         this.renderer = null;
         this._editor  = null;

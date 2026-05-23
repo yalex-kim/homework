@@ -22,13 +22,13 @@ function trapezoidalTime(dist, v0, v1, vMax, accel, decel) {
 
 class HardwareProfile {
     constructor(opts = {}) {
-        this.maxSpeed     = opts.maxSpeed     ?? 1.0;    // m/s
-        this.accel        = opts.accel        ?? 3.0;    // m/s²
-        this.decel        = opts.decel        ?? 3.0;    // m/s²
+        this.maxSpeed     = opts.maxSpeed     ?? 2.3;    // m/s
+        this.accel        = opts.accel        ?? 7.5;    // m/s²
+        this.decel        = opts.decel        ?? 7.5;    // m/s²
         this.maxOmega     = opts.maxOmega     ?? 360;    // deg/s  (pivot turn)
         this.alphaOmega   = opts.alphaOmega   ?? 720;    // deg/s² (pivot angular accel)
         this.turnType     = opts.turnType     ?? 'smooth'; // 'pivot' | 'smooth'
-        this.smoothRadius = opts.smoothRadius ?? 0.045;  // m
+        this.smoothRadius = opts.smoothRadius ?? 0.015;  // m
         this.cellSize     = opts.cellSize     ?? 0.180;  // m (standard 180 mm)
         this.treadWidth   = opts.treadWidth   ?? 0.086;  // m (86 mm default)
     }
