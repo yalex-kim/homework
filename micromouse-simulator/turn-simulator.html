@@ -36,8 +36,11 @@ label.sl{font-size:11px;color:var(--muted);white-space:nowrap;}
 .sv.warn{color:var(--warn);}
 .sv.err{color:var(--error);}
 
-#canvas-area{flex:1;display:flex;align-items:center;justify-content:center;padding:12px;background:var(--bg);}
-canvas{background:var(--bg);border:1px solid var(--border);border-radius:6px;display:block;}
+#canvas-area{flex:1;display:flex;flex-direction:column;overflow:hidden;background:var(--bg);}
+#maze-wrap{flex:1;display:flex;align-items:center;justify-content:center;padding:8px;overflow:hidden;}
+#maze-wrap canvas{background:var(--bg);border:1px solid var(--border);border-radius:6px;display:block;}
+#graph-wrap{height:158px;flex-shrink:0;border-top:1px solid var(--border);padding:4px 8px 4px;}
+#graph-wrap canvas{display:block;background:var(--bg);}
 </style>
 </head>
 <body>
@@ -74,6 +77,8 @@ canvas{background:var(--bg);border:1px solid var(--border);border-radius:6px;dis
   <div class="sec">속도 / 물리</div>
   <div class="pr"><label>최대 속도</label><input type="range" id="p-vmax" min="0.1" max="5" step="0.1" value="1.5"><span class="pv" id="v-vmax">1.5</span><em>m/s</em></div>
   <div class="pr"><label>최대 횡G</label><input type="range" id="p-alat" min="0.5" max="20" step="0.5" value="4.0"><span class="pv" id="v-alat">4.0</span><em>m/s²</em></div>
+  <div class="pr"><label>가속도 accel</label><input type="range" id="p-accel" min="0.5" max="30" step="0.5" value="5"><span class="pv" id="v-accel">5.0</span><em>m/s²</em></div>
+  <div class="pr"><label>감속도 decel</label><input type="range" id="p-decel" min="0.5" max="30" step="0.5" value="5"><span class="pv" id="v-decel">5.0</span><em>m/s²</em></div>
   <div class="pr"><label>최소 직선 d<sub>min</sub></label><input type="range" id="p-dmin" min="0" max="80" step="5" value="20"><span class="pv" id="v-dmin">20</span><em>mm</em></div>
 
   <div id="stats">
@@ -94,92 +99,72 @@ canvas{background:var(--bg);border:1px solid var(--border);border-radius:6px;dis
 </div>
 
 <div id="canvas-area">
-  <canvas id="cv"></canvas>
+  <div id="maze-wrap">
+    <canvas id="cv"></canvas>
+  </div>
+  <div id="graph-wrap">
+    <canvas id="gc"></canvas>
+  </div>
 </div>
 </div>
 </div>
 
 <script>
+// ── Control cycle constant ────────────────────────────────────────────────────
+const CTRL_DT = 0.001;  // 1 kHz simulated interrupt period (seconds)
+
 // ── Parameters ─────────────────────────────────────────────────────────────────
 const P = {
-  get C()    { return +document.getElementById('p-cell').value; },
-  get R()    { return +document.getElementById('p-r').value; },
-  get L()    { return +document.getElementById('p-tread').value; },
-  get bw()   { return +document.getElementById('p-bw').value; },
-  get bh()   { return +document.getElementById('p-bh').value; },
-  get vmax() { return +document.getElementById('p-vmax').value; },
-  get alat() { return +document.getElementById('p-alat').value; },
-  get dmin() { return +document.getElementById('p-dmin').value; },
+  get C()     { return +document.getElementById('p-cell').value; },
+  get R()     { return +document.getElementById('p-r').value; },
+  get L()     { return +document.getElementById('p-tread').value; },
+  get bw()    { return +document.getElementById('p-bw').value; },
+  get bh()    { return +document.getElementById('p-bh').value; },
+  get vmax()  { return +document.getElementById('p-vmax').value; },
+  get alat()  { return +document.getElementById('p-alat').value; },
+  get accel() { return +document.getElementById('p-accel').value; },
+  get decel() { return +document.getElementById('p-decel').value; },
+  get dmin()  { return +document.getElementById('p-dmin').value; },
 };
 
 let turnDir = 'right';  // 'right' | 'left'
 
 // ── Geometry ──────────────────────────────────────────────────────────────────
-// Coordinate system: mm, y increases DOWN (screen coords)
-// 90° right turn (N → E):
-//   Turning cell A: x=[0,C], y=[0,C]
-//   Entry  cell B: x=[0,C], y=[C,2C]   (robot comes from here heading North)
-//   Exit   cell C: x=[C,2C], y=[0,C]   (robot exits here heading East)
-//
-// For a LEFT turn (N → W), mirror everything about x = C/2:
-//   Entry cell B: same (x=[0,C], y=[C,2C])
-//   Exit  cell D: x=[-C,0], y=[0,C]
-//   Arc center: (C/2-R, C/2+R)
-//   P_in: (C/2, C/2+R), P_out: (C/2-R, C/2)
-
 function computeGeo() {
   const { C, R, L } = P;
   const isLeft = turnDir === 'left';
-
-  // For right turn: arc center at (C/2+R, C/2+R)
-  // For left  turn: arc center at (C/2-R, C/2+R)
   const sign = isLeft ? -1 : 1;
   const arcCx = C/2 + sign*R;
   const arcCy = C/2 + R;
 
-  // Turn entry / exit
-  // P_in: robot is traveling North, arrives at bottom of arc
   const P_in  = { x: C/2, y: C/2 + R };
-  // P_out: robot is traveling East (right) or West (left)
   const P_out = { x: C/2 + sign*R, y: C/2 };
 
-  // Cell centers
-  const entryCenter = { x: C/2, y: 3*C/2 };             // B center
-  const exitCenter  = { x: C/2 + sign*3*C/2, y: C/2 };  // C center (right of A, or left)
+  const entryCenter = { x: C/2, y: 3*C/2 };
+  const exitCenter  = { x: C/2 + sign*3*C/2, y: C/2 };
 
-  // Straight lengths (symmetric)
-  const straightLen = C - R;   // = C/2 - R (within turning cell) + C/2 (prev cell half)
-  const inCellLen   = C/2 - R; // straight within the turning cell
+  const straightLen = C - R;
+  const inCellLen   = C/2 - R;
   const arcLen      = Math.PI * R / 2;
   const totalLen    = 2 * straightLen + arcLen;
 
-  // Speeds
-  const vTurn  = Math.min(P.vmax, R > 0 ? Math.sqrt(P.alat * R / 1000) : 0);  // R in m
+  const vTurn  = Math.min(P.vmax, R > 0 ? Math.sqrt(P.alat * R / 1000) : 0);
   const omega  = R > 0 ? vTurn / (R / 1000) : 0;
   const vOuter = omega * (R + L/2) / 1000;
-  const vInner = omega * (R - L/2) / 1000;
+  const vInner = omega * Math.max(0, R - L/2) / 1000;
   const fg     = R > 0 ? (vTurn * vTurn) / (R / 1000) / 9.8 : 0;
   const tArc   = arcLen > 0 && vTurn > 0 ? (arcLen / 1000) / vTurn : 0;
 
-  // Arc sample points (φ: 0 → π/2)
   const N = 80;
   const center = [], left = [], right = [];
   for (let i = 0; i <= N; i++) {
     const phi = (i / N) * Math.PI / 2;
-    // Robot center on arc (formula derived from arc center and start angle)
     const rx = arcCx - sign * R * Math.cos(phi);
     const ry = arcCy - R * Math.sin(phi);
     center.push({ x: rx, y: ry, phi });
-
-    // Heading vector at phi (tangent, CW rotation):
-    // At phi=0: heading North = (0,-1); at phi=π/2: heading East/West = (±1,0)
-    // hx = sign*sin(phi), hy = -cos(phi)
     const hx = sign * Math.sin(phi), hy = -Math.cos(phi);
-    // Left/right normals (in screen y-down):
-    //   left-of-heading: (hy, -hx)   right-of-heading: (-hy, hx)
     const lnx = hy, lny = -hx;
     const rnx = -hy, rny = hx;
-
     const hw = L / 2;
     left.push( { x: rx + lnx*hw, y: ry + lny*hw });
     right.push({ x: rx + rnx*hw, y: ry + rny*hw });
@@ -195,25 +180,101 @@ function computeGeo() {
   };
 }
 
+// ── Velocity simulation (1 kHz control cycle) ─────────────────────────────────
+// Returns array of { t [ms], vL, vR, vC [m/s], phase, pathFrac [0..1] }
+// Phase 1: entry straight — both wheels accelerate from 0 to vTurn
+// Phase 2: arc            — constant vTurn center, differential vOuter/vInner
+// Phase 3: exit straight  — both wheels decelerate from vTurn to 0
+function simulateVelocityProfile(geo) {
+  const { straightLen, arcLen, totalLen, vTurn, R, L, sign } = geo;
+  if (vTurn <= 0 || totalLen <= 0) return [];
+
+  const accel = P.accel, decel = P.decel;
+  const R_m = R / 1000, L_m = L / 1000;
+  const vOuter = R_m > 0 ? vTurn * (R_m + L_m / 2) / R_m : vTurn;
+  const vInner = R_m > 0 ? Math.max(0, vTurn * (R_m - L_m / 2) / R_m) : vTurn;
+  // Right turn (sign=+1): robot curves right → left wheel is outer (faster)
+  const vL_arc = sign > 0 ? vOuter : vInner;
+  const vR_arc = sign > 0 ? vInner : vOuter;
+
+  const pts = [];
+  let t = 0, v = 0, pathDistMm = 0;
+  const MAX_STEPS = 30000;
+  let steps = 0;
+
+  // ── Phase 1: entry straight (ramp 0 → vTurn) ────────────────────────────
+  let dEntry = 0;
+  while (dEntry < straightLen - 1e-6 && steps++ < MAX_STEPS) {
+    v = Math.min(v + accel * CTRL_DT, vTurn);
+    const stepMm = v * CTRL_DT * 1000;
+    dEntry = Math.min(dEntry + stepMm, straightLen);
+    pathDistMm = dEntry;
+    t += CTRL_DT;
+    pts.push({ t: t * 1000, vL: v, vR: v, vC: v, phase: 'entry', pathFrac: pathDistMm / totalLen });
+  }
+
+  // ── Phase 2: arc (constant vTurn, differential wheel speeds) ────────────
+  let dArc = 0;
+  while (dArc < arcLen - 1e-6 && steps++ < MAX_STEPS) {
+    const stepMm = vTurn * CTRL_DT * 1000;
+    dArc = Math.min(dArc + stepMm, arcLen);
+    pathDistMm = straightLen + dArc;
+    t += CTRL_DT;
+    pts.push({ t: t * 1000, vL: vL_arc, vR: vR_arc, vC: vTurn, phase: 'arc', pathFrac: pathDistMm / totalLen });
+  }
+
+  // ── Phase 3: exit straight (decel vTurn → 0) ────────────────────────────
+  v = vTurn;
+  let dExit = 0;
+  while (dExit < straightLen - 1e-6 && steps++ < MAX_STEPS) {
+    const remaining = straightLen - dExit;
+    const stopDistMm = (v * v) / (2 * decel) * 1000;
+    if (remaining <= stopDistMm + 1e-6) {
+      v = Math.max(v - decel * CTRL_DT, 0);
+    } else {
+      v = Math.min(v + accel * CTRL_DT, vTurn);
+    }
+    const stepMm = v * CTRL_DT * 1000;
+    dExit = Math.min(dExit + stepMm, straightLen);
+    pathDistMm = straightLen + arcLen + dExit;
+    t += CTRL_DT;
+    pts.push({ t: t * 1000, vL: v, vR: v, vC: v, phase: 'exit', pathFrac: pathDistMm / totalLen });
+  }
+
+  return pts;
+}
+
+// Map path fraction (animT) → simulation time (ms)
+function findTimeAtFrac(sim, frac) {
+  if (!sim.length) return 0;
+  for (let i = 0; i < sim.length; i++) {
+    if (sim[i].pathFrac >= frac) {
+      if (i === 0) return 0;
+      const p0 = sim[i - 1], p1 = sim[i];
+      const f = (frac - p0.pathFrac) / (p1.pathFrac - p0.pathFrac + 1e-12);
+      return p0.t + f * (p1.t - p0.t);
+    }
+  }
+  return sim[sim.length - 1].t;
+}
+
 // ── Position along path (t ∈ [0,1]) ──────────────────────────────────────────
 function pathAt(geo, t) {
   const { C, R, sign, straightLen, arcLen, totalLen } = geo;
-  const ef = straightLen / totalLen;   // entry fraction
-  const af = arcLen / totalLen;        // arc fraction
+  const ef = straightLen / totalLen;
+  const af = arcLen / totalLen;
 
   if (t <= ef) {
     const frac = ef > 0 ? t / ef : 0;
-    // Entry straight: heading North, x=C/2, y from 3C/2 down to C/2+R (up in screen)
     return { x: C/2, y: 3*C/2 - frac*straightLen, angle: 0 };
   } else if (t <= ef + af) {
     const frac = af > 0 ? (t - ef) / af : 0;
     const phi  = frac * Math.PI / 2;
     const rx   = geo.arcCx - sign * R * Math.cos(phi);
     const ry   = geo.arcCy - R * Math.sin(phi);
-    return { x: rx, y: ry, angle: phi * sign };  // angle: 0=N, +π/2=E, -π/2=W
+    return { x: rx, y: ry, angle: phi * sign };
   } else {
     const frac = (1 - ef - af) > 0 ? (t - ef - af) / (1 - ef - af) : 0;
-    // Exit straight: heading East/West, y=C/2, x from C/2+sign*R outward
     return {
       x: C/2 + sign*(R + frac*straightLen),
       y: C/2,
@@ -224,18 +285,19 @@ function pathAt(geo, t) {
 
 // ── Canvas / scale ────────────────────────────────────────────────────────────
 const cv = document.getElementById('cv');
+const gc = document.getElementById('gc');
 
 function resizeCanvas() {
-  const area = document.getElementById('canvas-area');
-  const sz   = Math.min(area.clientWidth - 24, area.clientHeight - 24);
+  const wrap = document.getElementById('maze-wrap');
+  const sz = Math.min(wrap.clientWidth - 24, wrap.clientHeight - 24);
   cv.width = cv.height = Math.max(sz, 200);
+
+  const gw = document.getElementById('graph-wrap');
+  gc.width  = Math.max(gw.clientWidth,  300);
+  gc.height = Math.max(gw.clientHeight, 80);
 }
 
 function makeTransform(C, isLeft) {
-  // View: show turning cell + entry cell below + exit cell right/left
-  // bounding box in mm (right turn):
-  //   x: isLeft ? -C : 0  to  2C
-  //   y: 0 to 2C
   const PAD  = C * 0.15;
   const xMin = isLeft ? -C - PAD : -PAD;
   const xMax = isLeft ? C + PAD  : 2*C + PAD;
@@ -273,7 +335,7 @@ function drawRobotBody(ctx, tf, x, y, angle, bw, bh, alpha) {
   const s = tf.scale;
   ctx.save();
   ctx.translate(cx, cy);
-  ctx.rotate(angle);               // 0=N, +π/2=E, -π/2=W (matches robotAt)
+  ctx.rotate(angle);
   ctx.globalAlpha = alpha;
   const hw = (bw/2)*s, hh = (bh/2)*s;
   const ch = Math.min(hw, hh) * 0.2;
@@ -287,7 +349,6 @@ function drawRobotBody(ctx, tf, x, y, angle, bw, bh, alpha) {
   ctx.strokeStyle = '#3a8fe8';
   ctx.lineWidth = 1.5;
   ctx.fill(); ctx.stroke();
-  // Forward arrow
   ctx.beginPath();
   ctx.moveTo(0,-hh*0.7); ctx.lineTo(-hh*0.18,-hh*0.25); ctx.lineTo(hh*0.18,-hh*0.25);
   ctx.closePath();
@@ -306,7 +367,6 @@ function drawDimLine(ctx, tf, x0,y0,x1,y1, label, color='#6c7086') {
   ctx.setLineDash([3,4]);
   ctx.beginPath(); ctx.moveTo(px0,py0); ctx.lineTo(px1,py1); ctx.stroke();
   ctx.setLineDash([]);
-  // Arrowheads
   const dx=px1-px0, dy=py1-py0, len=Math.sqrt(dx*dx+dy*dy)||1;
   const ux=dx/len, uy=dy/len, hs=7;
   [[px0,py0,1],[px1,py1,-1]].forEach(([ax,ay,s]) => {
@@ -316,11 +376,188 @@ function drawDimLine(ctx, tf, x0,y0,x1,y1, label, color='#6c7086') {
     ctx.lineTo(ax-s*ux*hs - uy*hs*0.4, ay-s*uy*hs + ux*hs*0.4);
     ctx.closePath(); ctx.fill();
   });
-  // Label
   ctx.font = `bold ${Math.max(9,Math.round(tf.scale*3.5))}px monospace`;
   ctx.textAlign = 'center';
   ctx.textBaseline = 'middle';
   ctx.fillText(label, (px0+px1)/2 + uy*13, (py0+py1)/2 - ux*13);
+}
+
+// ── Velocity graph ────────────────────────────────────────────────────────────
+function drawGraph(sim) {
+  const ctx = gc.getContext('2d');
+  ctx.clearRect(0, 0, gc.width, gc.height);
+  ctx.fillStyle = '#0d0d1a';
+  ctx.fillRect(0, 0, gc.width, gc.height);
+
+  if (!sim || sim.length < 2) {
+    ctx.fillStyle = '#6c7086';
+    ctx.font = '11px sans-serif';
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.fillText('v_turn = 0 (R 또는 a_lat 확인)', gc.width / 2, gc.height / 2);
+    return;
+  }
+
+  const PAD = { t: 20, r: 12, b: 30, l: 44 };
+  const W = gc.width  - PAD.l - PAD.r;
+  const H = gc.height - PAD.t - PAD.b;
+
+  const tMax = sim[sim.length - 1].t;  // ms
+  const vMax = Math.max(...sim.map(p => Math.max(p.vL, p.vR))) * 1.18 || 1;
+
+  const tx = (t) => PAD.l + (t / tMax) * W;
+  const ty = (v) => PAD.t + H - (v / vMax) * H;
+
+  // Phase boundary times
+  let phaseEntryEnd = 0, phaseArcEnd = 0;
+  for (let i = 0; i < sim.length - 1; i++) {
+    if (sim[i].phase === 'entry' && sim[i+1].phase === 'arc')  phaseEntryEnd = sim[i].t;
+    if (sim[i].phase === 'arc'   && sim[i+1].phase === 'exit') phaseArcEnd   = sim[i].t;
+  }
+  if (phaseArcEnd === 0) phaseArcEnd = tMax;
+
+  // Phase zone backgrounds
+  const fillZone = (t0, t1, color) => {
+    ctx.fillStyle = color;
+    ctx.fillRect(tx(t0), PAD.t, Math.max(tx(t1) - tx(t0), 0), H);
+  };
+  fillZone(0,             phaseEntryEnd, 'rgba(249,226,175,0.04)');
+  fillZone(phaseEntryEnd, phaseArcEnd,   'rgba(166,227,161,0.07)');
+  fillZone(phaseArcEnd,   tMax,          'rgba(249,226,175,0.04)');
+
+  // Grid lines
+  ctx.lineWidth = 0.5;
+  ctx.setLineDash([2, 4]);
+
+  const vStep = vMax > 3 ? 1 : vMax > 1.5 ? 0.5 : 0.25;
+  ctx.strokeStyle = 'rgba(56,56,81,0.55)';
+  for (let v = 0; v <= vMax; v += vStep) {
+    ctx.beginPath(); ctx.moveTo(PAD.l, ty(v)); ctx.lineTo(PAD.l + W, ty(v)); ctx.stroke();
+  }
+  const tStep = tMax > 600 ? 200 : tMax > 300 ? 100 : tMax > 150 ? 50 : tMax > 60 ? 20 : 10;
+  for (let t = 0; t <= tMax; t += tStep) {
+    ctx.beginPath(); ctx.moveTo(tx(t), PAD.t); ctx.lineTo(tx(t), PAD.t + H); ctx.stroke();
+  }
+  ctx.setLineDash([]);
+
+  // Phase separator lines
+  ctx.strokeStyle = 'rgba(108,112,134,0.45)';
+  ctx.lineWidth = 1;
+  ctx.setLineDash([4, 3]);
+  for (const t of [phaseEntryEnd, phaseArcEnd]) {
+    if (t > 0 && t < tMax) {
+      ctx.beginPath(); ctx.moveTo(tx(t), PAD.t); ctx.lineTo(tx(t), PAD.t + H); ctx.stroke();
+    }
+  }
+  ctx.setLineDash([]);
+
+  // Velocity lines — center first (behind), then wheels on top
+  const polyline = (keyFn, color, lw) => {
+    ctx.beginPath();
+    ctx.strokeStyle = color;
+    ctx.lineWidth = lw;
+    sim.forEach((p, i) => { i === 0 ? ctx.moveTo(tx(p.t), ty(keyFn(p))) : ctx.lineTo(tx(p.t), ty(keyFn(p))); });
+    ctx.stroke();
+  };
+  polyline(p => p.vC, 'rgba(249,226,175,0.30)', 1.5);
+  polyline(p => p.vR, '#89b4fa', 2);
+  polyline(p => p.vL, '#f38ba8', 2);
+
+  // Axes
+  ctx.strokeStyle = '#383851';
+  ctx.lineWidth = 1;
+  ctx.beginPath();
+  ctx.moveTo(PAD.l, PAD.t); ctx.lineTo(PAD.l, PAD.t + H);
+  ctx.moveTo(PAD.l, PAD.t + H); ctx.lineTo(PAD.l + W, PAD.t + H);
+  ctx.stroke();
+
+  // Y-axis labels (velocity)
+  ctx.fillStyle = '#6c7086';
+  ctx.font = '9px monospace';
+  ctx.textAlign = 'right';
+  ctx.textBaseline = 'middle';
+  for (let v = 0; v <= vMax; v += vStep) {
+    ctx.fillText(v.toFixed(v % 1 === 0 ? 0 : (v % 0.5 === 0 ? 1 : 2)), PAD.l - 3, ty(v));
+  }
+
+  // X-axis labels (time)
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'top';
+  for (let t = 0; t <= tMax; t += tStep) {
+    ctx.fillText(t, tx(t), PAD.t + H + 3);
+  }
+
+  // Axis unit labels
+  ctx.fillStyle = '#4a4a6a';
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'bottom';
+  ctx.fillText('ms', PAD.l + W / 2, gc.height - 1);
+  ctx.save();
+  ctx.translate(10, PAD.t + H / 2);
+  ctx.rotate(-Math.PI / 2);
+  ctx.textBaseline = 'middle';
+  ctx.fillText('m/s', 0, 0);
+  ctx.restore();
+
+  // Phase labels (above plot area)
+  ctx.fillStyle = 'rgba(108,112,134,0.75)';
+  ctx.font = '9px sans-serif';
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'top';
+  if (phaseEntryEnd > 0) ctx.fillText('진입', tx(phaseEntryEnd / 2), PAD.t + 2);
+  ctx.fillText('호', tx((phaseEntryEnd + phaseArcEnd) / 2), PAD.t + 2);
+  if (phaseArcEnd < tMax) ctx.fillText('진출', tx((phaseArcEnd + tMax) / 2), PAD.t + 2);
+
+  // Legend
+  const isLeft = turnDir === 'left';
+  const legItems = [
+    { color: '#f38ba8', label: `좌 (${isLeft ? '내측' : '외측'})` },
+    { color: '#89b4fa', label: `우 (${isLeft ? '외측' : '내측'})` },
+    { color: 'rgba(249,226,175,0.65)', label: '중심' },
+  ];
+  ctx.lineWidth = 2;
+  legItems.forEach(({ color, label }, i) => {
+    const lx = PAD.l + 6 + i * 72;
+    const ly = PAD.t + H + 19;
+    ctx.strokeStyle = color;
+    ctx.beginPath(); ctx.moveTo(lx, ly); ctx.lineTo(lx + 14, ly); ctx.stroke();
+    ctx.fillStyle = color;
+    ctx.font = '9px sans-serif';
+    ctx.textAlign = 'left';
+    ctx.textBaseline = 'middle';
+    ctx.fillText(label, lx + 17, ly);
+  });
+
+  // Current-position time marker (tracks animation)
+  if (animT > 0 && animT < 1) {
+    const curTimeMs = findTimeAtFrac(sim, animT);
+    const mx = tx(curTimeMs);
+
+    ctx.strokeStyle = 'rgba(205,214,244,0.80)';
+    ctx.lineWidth = 1.5;
+    ctx.setLineDash([3, 3]);
+    ctx.beginPath(); ctx.moveTo(mx, PAD.t); ctx.lineTo(mx, PAD.t + H); ctx.stroke();
+    ctx.setLineDash([]);
+
+    // Dot at each wheel velocity
+    const ptIdx = sim.findIndex(p => p.t >= curTimeMs);
+    if (ptIdx > 0) {
+      const p = sim[ptIdx];
+      for (const [v, color] of [[p.vL, '#f38ba8'], [p.vR, '#89b4fa']]) {
+        ctx.beginPath();
+        ctx.arc(mx, ty(v), 3.5, 0, Math.PI * 2);
+        ctx.fillStyle = color;
+        ctx.fill();
+      }
+      // Time label
+      ctx.fillStyle = 'rgba(205,214,244,0.65)';
+      ctx.font = '9px monospace';
+      ctx.textAlign = mx > PAD.l + W * 0.75 ? 'right' : 'left';
+      ctx.textBaseline = 'bottom';
+      const labelX = mx > PAD.l + W * 0.75 ? mx - 3 : mx + 3;
+      ctx.fillText(`${curTimeMs.toFixed(0)}ms`, labelX, PAD.t + H - 1);
+    }
+  }
 }
 
 // ── Main draw ─────────────────────────────────────────────────────────────────
@@ -331,6 +568,13 @@ let lastTS = null;
 
 function draw() {
   const geo = computeGeo();
+  const sim = simulateVelocityProfile(geo);
+  drawMaze(geo);
+  drawGraph(sim);
+  updateStats(geo);
+}
+
+function drawMaze(geo) {
   const { C, R, L, sign, isLeft, arcCx, arcCy } = geo;
   const tf = makeTransform(C, isLeft);
 
@@ -345,12 +589,11 @@ function draw() {
   const [ax,ay] = px(tf,0,0);
   const cs = C*tf.scale;
   ctx.fillStyle = cellBg;
-  ctx.fillRect(ax,ay,cs,cs);           // A: turning cell
-  ctx.fillRect(...px(tf,0,C), cs,cs);  // B: entry cell
+  ctx.fillRect(ax,ay,cs,cs);
+  ctx.fillRect(...px(tf,0,C), cs,cs);
   ctx.fillStyle = goalBg;
-  ctx.fillRect(...px(tf,sign*C, 0), cs, cs); // C: exit cell (highlighted)
+  ctx.fillRect(...px(tf,sign*C, 0), cs, cs);
 
-  // Cell labels
   ctx.fillStyle = 'rgba(108,112,134,0.7)';
   ctx.font = `${Math.max(9,Math.round(tf.scale*4))}px sans-serif`;
   ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
@@ -362,49 +605,33 @@ function draw() {
   ctx.strokeStyle = '#cdd6f4';
   ctx.lineWidth = 2.5;
   ctx.lineCap = 'square';
-
-  // Outer boundary walls
-  // North of A
   drawLine(ctx,tf, 0,0, C,0);
-  // West of A+B (left column)
   drawLine(ctx,tf, 0,0, 0,2*C);
-  // South of B
   drawLine(ctx,tf, 0,2*C, C,2*C);
-  // East of B (the corner: x=C, y=C to 2C — wall since exit cell is UP, not right)
   drawLine(ctx,tf, C,C, C,2*C);
-  // North of exit cell
   drawLine(ctx,tf, sign*C,0, sign*2*C,0);
-  // Outer side of exit cell
   drawLine(ctx,tf, sign*2*C,0, sign*2*C,C);
-  // South of exit cell
   drawLine(ctx,tf, sign*C,C, sign*2*C,C);
 
-  // Open passages (dashed guides)
   ctx.strokeStyle = 'rgba(205,214,244,0.15)';
   ctx.lineWidth = 1; ctx.setLineDash([4,4]);
-  drawLine(ctx,tf, 0,C, C,C);           // A–B boundary (open)
-  drawLine(ctx,tf, sign*C,0, sign*C,C); // A–C boundary (open)
+  drawLine(ctx,tf, 0,C, C,C);
+  drawLine(ctx,tf, sign*C,0, sign*C,C);
   ctx.setLineDash([]);
 
   // ── Wheel tracks (full path, dim) ──────────────────────────────────────────
-  const entryLen = geo.straightLen;
-
-  // Entry straight wheel tracks
   const lhw = L/2;
   ctx.lineWidth = 1.5;
   ctx.strokeStyle = 'rgba(243,139,168,0.28)';
-  drawLine(ctx,tf, C/2-lhw, 3*C/2, C/2-lhw, C/2+R);  // left wheel entry
+  drawLine(ctx,tf, C/2-lhw, 3*C/2, C/2-lhw, C/2+R);
   ctx.strokeStyle = 'rgba(137,180,250,0.28)';
-  drawLine(ctx,tf, C/2+lhw, 3*C/2, C/2+lhw, C/2+R);  // right wheel entry (sign flipped for left turn)
+  drawLine(ctx,tf, C/2+lhw, 3*C/2, C/2+lhw, C/2+R);
 
-  // Arc wheel tracks
   ctx.strokeStyle = 'rgba(243,139,168,0.28)';
   drawPolyline(ctx, tf, geo.pts.left);
   ctx.strokeStyle = 'rgba(137,180,250,0.28)';
   drawPolyline(ctx, tf, geo.pts.right);
 
-  // Exit straight wheel tracks
-  // For right turn: heading East, left=North offset (-y), right=South offset (+y)
   ctx.strokeStyle = 'rgba(243,139,168,0.28)';
   drawLine(ctx,tf, C/2+sign*R, C/2-lhw, sign*3*C/2, C/2-lhw);
   ctx.strokeStyle = 'rgba(137,180,250,0.28)';
@@ -413,22 +640,19 @@ function draw() {
   // ── Center path (full, dim) ────────────────────────────────────────────────
   ctx.strokeStyle = 'rgba(249,226,175,0.22)';
   ctx.lineWidth = 2;
-  // Entry straight center
   drawLine(ctx,tf, C/2, 3*C/2, C/2, C/2+R);
-  // Arc center
   drawPolyline(ctx, tf, geo.pts.center);
-  // Exit straight center
   drawLine(ctx,tf, C/2+sign*R, C/2, sign*3*C/2, C/2);
 
   // ── Animated traveled portion ──────────────────────────────────────────────
   if (animT > 0) {
+    const entryLen = geo.straightLen;
     const ef = entryLen / geo.totalLen;
     const af = geo.arcLen / geo.totalLen;
 
     ctx.lineWidth = 2.5;
 
     const drawTraveledEntry = (tFrac) => {
-      // tFrac 0→1 along entry straight
       const yStart = 3*C/2, yEnd = C/2+R;
       const yNow = yStart - tFrac*(yStart-yEnd);
       ctx.strokeStyle = '#f9e2af';
@@ -479,7 +703,6 @@ function draw() {
     const p = pathAt(geo, t);
     drawRobotBody(ctx, tf, p.x, p.y, p.angle, P.bw, P.bh, a);
   }
-  // Animated robot
   {
     const p = pathAt(geo, animT);
     drawRobotBody(ctx, tf, p.x, p.y, p.angle, P.bw, P.bh, 0.9);
@@ -497,7 +720,6 @@ function draw() {
     ctx.fillStyle='#a6e3a1';
     ctx.font='10px monospace'; ctx.textAlign='left'; ctx.textBaseline='top';
     ctx.fillText('ICR',icx+7,icy+2);
-    // R annotation line
     const p0 = geo.pts.center[Math.floor(geo.N/4)];
     ctx.strokeStyle='rgba(166,227,161,0.4)'; ctx.lineWidth=1; ctx.setLineDash([3,3]);
     ctx.beginPath(); ctx.moveTo(icx,icy); ctx.lineTo(...px(tf,p0.x,p0.y)); ctx.stroke();
@@ -511,34 +733,18 @@ function draw() {
 
   // ── Dimension annotations ──────────────────────────────────────────────────
   const annColor = '#6c7086';
-  // Entry straight annotation (on the right of entry column)
-  drawDimLine(ctx,tf, C+10,3*C/2, C+10,C/2+R,
-    `${geo.straightLen.toFixed(0)}mm`, annColor);
-  // Exit straight annotation (below exit row)
-  drawDimLine(ctx,tf, C/2+sign*R, C+10, sign*3*C/2, C+10,
-    `${geo.straightLen.toFixed(0)}mm`, annColor);
-  // In-cell straight (within turning cell)
+  drawDimLine(ctx,tf, C+10,3*C/2, C+10,C/2+R, `${geo.straightLen.toFixed(0)}mm`, annColor);
+  drawDimLine(ctx,tf, C/2+sign*R, C+10, sign*3*C/2, C+10, `${geo.straightLen.toFixed(0)}mm`, annColor);
   if (geo.inCellLen > 2) {
     ctx.strokeStyle='rgba(108,112,134,0.5)'; ctx.lineWidth=1; ctx.setLineDash([2,4]);
-    drawLine(ctx,tf, C/2,C/2+R, C/2,C);  // entry straight within cell
+    drawLine(ctx,tf, C/2,C/2+R, C/2,C);
     ctx.setLineDash([]);
   }
 
-  // ── Cell size guide ────────────────────────────────────────────────────────
-  ctx.strokeStyle='rgba(56,56,81,0.6)'; ctx.lineWidth=0.5;
-  // Cell center cross
-  const [cx0,cy0]=px(tf,C/2,C/2);
-  ctx.beginPath();
-  ctx.moveTo(cx0-6,cy0); ctx.lineTo(cx0+6,cy0);
-  ctx.moveTo(cx0,cy0-6); ctx.lineTo(cx0,cy0+6);
-  ctx.stroke();
-
   // ── Warn if arc exceeds turning cell ─────────────────────────────────────
   if (R > C/2) {
-    // Highlight out-of-bounds arc regions
     ctx.strokeStyle = 'rgba(243,139,168,0.4)';
     ctx.lineWidth = 3;
-    // P_in is in the entry cell (y > C), P_out is in the exit cell (x > C)
     const warningPts = geo.pts.center.filter(p => p.y > C || Math.abs(p.x - C/2) > C/2);
     if (warningPts.length) {
       ctx.beginPath();
@@ -549,8 +755,6 @@ function draw() {
       ctx.stroke();
     }
   }
-
-  updateStats(geo);
 }
 
 // ── Stats ──────────────────────────────────────────────────────────────────────
@@ -587,10 +791,18 @@ function animFrame(ts) {
   if (lastTS === null) lastTS = ts;
   const dt = ts - lastTS;
   lastTS = ts;
+
   const geo = computeGeo();
-  const dur = (geo.tArc > 0 ? geo.tArc * (geo.totalLen / geo.arcLen) : 2) * 1000 / animSpeed;
+  const sim = simulateVelocityProfile(geo);
+  // Use physics-accurate total time from simulation as animation duration
+  const totalMs = sim.length > 0 ? sim[sim.length - 1].t : (geo.tArc * (geo.totalLen / (geo.arcLen || 1)) * 1000);
+  const dur = Math.max(totalMs, 100) / animSpeed;
+
   animT = Math.min(animT + dt / dur, 1);
-  draw();
+  drawMaze(geo);
+  drawGraph(sim);
+  updateStats(geo);
+
   if (animT >= 1) {
     playing = false;
     document.getElementById('btn-play').textContent = '▶ 재생';
@@ -636,14 +848,15 @@ document.getElementById('anim-speed').oninput = e => {
 const SLIDERS = [
   ['p-cell','v-cell',1],['p-r','v-r',1],['p-tread','v-tread',1],
   ['p-bw','v-bw',1],['p-bh','v-bh',1],
-  ['p-vmax','v-vmax',1],['p-alat','v-alat',1],['p-dmin','v-dmin',1],
+  ['p-vmax','v-vmax',1],['p-alat','v-alat',1],
+  ['p-accel','v-accel',1],['p-decel','v-decel',1],
+  ['p-dmin','v-dmin',1],
 ];
 SLIDERS.forEach(([sid, vid, dec]) => {
   const el = document.getElementById(sid);
   el.oninput = () => {
     document.getElementById(vid).textContent = parseFloat(el.value).toFixed(dec);
     animT = 0;
-    // Keep R ≤ C (soft max) and sync slider max
     if (sid === 'p-cell') {
       document.getElementById('p-r').max = parseFloat(el.value);
     }
