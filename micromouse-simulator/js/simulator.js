@@ -73,17 +73,17 @@ function detectDiag(x, y, curFacing) {
 }
 
 while (!robot.atGoal && steps++ < 3000) {
+    ff.sense(robot);
     const dir = ff.bestDir(robot.x, robot.y, facing());
     if (!dir) { console.log('경로 없음!'); break; }
 
     if (facing() === dir) {
-        // 직진 방향 — 연속 직진 칸 수를 계산해 한 번에 가속 이동
+        // 직진 방향 — 실제 벽 기준으로 연속 직진 칸 수를 계산해 한 번에 가속 이동
         let cnt = 0, cx = robot.x, cy = robot.y;
         while (cnt < H) {
-            if (ff.knownWalls[cy][cx][dir]) break;
+            if (robot.maze.hasWall(cx, cy, dir)) break;
             const nx = cx + DX[dir], ny = cy + DY[dir];
             if (nx < 0 || nx >= W || ny < 0 || ny >= H) break;
-            if (ff.getDistMap()[ny][nx] === Infinity) break;
             cx = nx; cy = ny; cnt++;
             if (ff.bestDir(cx, cy, dir) !== dir) break;
         }
