@@ -20,6 +20,17 @@
             <button id="btn-start"    class="btn-primary">▶ 시작</button>
             <button id="btn-stop"     class="btn-secondary">⏹ 정지</button>
             <button id="btn-reset"    class="btn-secondary">↺ 리셋</button>
+            <select id="maze-select" class="btn-secondary">
+                <option value="2025">2025 全日本 第46回</option>
+                <option value="2024">2024 全日本 第45回</option>
+                <option value="2023">2023 全日本 第44回</option>
+                <option value="2012">2012 全日本 第33回</option>
+                <option value="2011">2011 全日本 第32回</option>
+                <option value="2009">2009 全日本 第30回</option>
+                <option value="1998">1998 全日本 第19回</option>
+                <option value="1985">1985 全日本 第6回</option>
+                <option value="random">🔀 랜덤 생성</option>
+            </select>
             <button id="btn-new-maze" class="btn-secondary">🔀 새 미로</button>
             <button id="btn-ff-overlay" class="btn-secondary">FF 오버레이</button>
             <button id="btn-wheels" class="btn-secondary active">바퀴 궤적</button>
@@ -128,8 +139,9 @@
     </div><!-- #main -->
 </div><!-- #app -->
 
-<!-- Load order matters: maze → hardware → floodfill → robot → renderer → simulator -->
+<!-- Load order matters: maze → mazedata → hardware → floodfill → robot → renderer → simulator -->
 <script src="js/maze.js"></script>
+<script src="js/mazedata.js"></script>
 <script src="js/hardware.js"></script>
 <script src="js/floodfill.js"></script>
 <script src="js/robot.js"></script>

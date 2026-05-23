@@ -39,7 +39,7 @@ class Simulator {
         this.maze     = new Maze();
         this.hardware = new HardwareProfile();
         this.robot    = new Robot(this.maze, this.hardware);
-        this.robot.speed = 3;  // default: slow enough to see wall discovery
+        this.robot.speed = 3;
         this.ff       = new FloodFill(this.maze, this.hardware);
         this.renderer = null;
         this._editor  = null;
@@ -66,6 +66,14 @@ class Simulator {
         document.getElementById('btn-new-maze').onclick = () => this.newMaze();
         document.getElementById('btn-default').onclick  = () => this._editor.setValue(DEFAULT_ALGORITHM);
 
+        // Maze selector
+        document.getElementById('maze-select').onchange = () => {
+            this.robot.stop();
+            setTimeout(() => {
+                this._applyMaze(document.getElementById('maze-select').value);
+            }, 80);
+        };
+
         // Simulation speed
         const slider = document.getElementById('speed-slider');
         slider.oninput = (e) => {
@@ -74,7 +82,7 @@ class Simulator {
             document.getElementById('speed-val').textContent = v;
         };
 
-        // Flood fill overlay — enabled by default so wall discovery is visible
+        // Flood fill overlay — enabled by default
         this.renderer.showFF = true;
         document.getElementById('btn-ff-overlay').classList.add('active');
         document.getElementById('btn-ff-overlay').onclick = (e) => {
@@ -91,6 +99,9 @@ class Simulator {
         // Hardware sliders
         this._bindHardwareUI();
 
+        // Load default maze (most recent competition)
+        this._applyMaze(document.getElementById('maze-select').value);
+
         // Render loop
         const loop = (t) => {
             const dt = Math.min(t - this._lastTime, 50);
@@ -101,6 +112,24 @@ class Simulator {
             requestAnimationFrame(loop);
         };
         requestAnimationFrame(loop);
+    }
+
+    // Apply maze by id ('random' or a preset id like '2025')
+    _applyMaze(id) {
+        if (id === 'random') {
+            this.maze.generate();
+        } else {
+            const preset = MAZE_PRESETS.find(p => p.id === id);
+            if (preset) this.maze.loadPreset(parseMazeText(preset.text));
+            else this.maze.generate();
+        }
+        this.robot = new Robot(this.maze, this.hardware);
+        this.robot.speed = parseInt(document.getElementById('speed-slider').value, 10);
+        this.ff = new FloodFill(this.maze, this.hardware);
+        this.renderer.updateMaze(this.maze);
+        this.renderer.updateRobot(this.robot);
+        this.renderer.updateFloodFill(this.ff);
+        this._setStatus('준비', 'idle');
     }
 
     async start() {
@@ -148,13 +177,8 @@ class Simulator {
     newMaze() {
         this.robot.stop();
         setTimeout(() => {
-            this.maze.generate();
-            this.robot  = new Robot(this.maze, this.hardware);
-            this.ff     = new FloodFill(this.maze, this.hardware);
-            this.renderer.updateMaze(this.maze);
-            this.renderer.updateRobot(this.robot);
-            this.renderer.updateFloodFill(this.ff);
-            this._setStatus('준비', 'idle');
+            document.getElementById('maze-select').value = 'random';
+            this._applyMaze('random');
         }, 80);
     }
 

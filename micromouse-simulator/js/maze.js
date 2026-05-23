@@ -77,6 +77,15 @@ class Maze {
         this.walls[gy + 1][gx + 1].n = false;
     }
 
+    loadPreset(wallsData) {
+        this.explored = Array.from({ length: this.height }, () =>
+            Array(this.width).fill(false)
+        );
+        for (let y = 0; y < this.height; y++)
+            for (let x = 0; x < this.width; x++)
+                this.walls[y][x] = {...wallsData[y][x]};
+    }
+
     hasWall(x, y, dir) {
         if (x < 0 || x >= this.width || y < 0 || y >= this.height) return true;
         return this.walls[y][x][dir];
