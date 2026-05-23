@@ -70,6 +70,13 @@ function detectDiag(x, y, curFacing) {
         if (turns[i] === turns[0] && turns[i+1] === -turns[0]) pairs++;
         else break;
     }
+    // If there's a trailing turn in the same direction as firstSign (e.g. L-R-L or R-L-R),
+    // the diagonal exit arc (which returns to original heading) would immediately be
+    // followed by another arc in the same direction → S-curve visual artifact.
+    // Avoid this by not using diagonal for this pattern.
+    if (pairs * 2 < turns.length && turns[pairs * 2] === turns[0]) {
+        pairs--;
+    }
     return pairs >= 1 ? { pairs, firstSign: turns[0] } : null;
 }
 
