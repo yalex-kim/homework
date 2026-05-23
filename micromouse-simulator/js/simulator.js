@@ -62,6 +62,7 @@ function detectDiag(x, y, curFacing) {
         if (diff !== 90 && diff !== 270) break;
         turns.push(diff === 90 ? 1 : -1);
         cx += DX[nd]; cy += DY[nd]; cur = nd;
+        if (!robot.maze.explored[cy][cx]) break;
     }
     if (turns.length < 2 || turns[0] === turns[1]) return null;
     let pairs = 0;
