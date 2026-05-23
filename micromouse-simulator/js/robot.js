@@ -420,31 +420,6 @@ class Robot {
         return true;
     }
 
-    // ── U-turn boundary fix ───────────────────────────────────────────────────
-    //
-    // When _atBoundary=true the robot sits at the boundary between two cells.
-    // After a 180° pivot the same physical position is already the entry boundary
-    // of the next cell in the new direction, so no physical movement is needed —
-    // only a logical position update.  This prevents the 1.0-cell moveForward from
-    // over-shooting to the far boundary and misaligning all subsequent moves.
-    _crossBoundaryInstant() {
-        if (this.sensors.front) return false;
-        const DX = [0,1,0,-1], DY = [-1,0,1,0];
-        const di  = ((Math.round(this.angle / 90)) % 4 + 4) % 4;
-        const toX = this.x + DX[di], toY = this.y + DY[di];
-        if (toX < 0 || toX >= this.maze.width || toY < 0 || toY >= this.maze.height) return false;
-        this.x = toX; this.y = toY;
-        this._atBoundary = true;
-        this.odometer++;
-        this.path.push({
-            x: this.x, y: this.y,
-            visX: this.visX, visY: this.visY,
-            seg: {type: 'move'},
-        });
-        this.maze.explored[this.y][this.x] = true;
-        return true;
-    }
-
     async moveTo(worldDir) {
         if (this._stopped) throw new StopError();
         const targetAngle = {n:0, e:90, s:180, w:270}[worldDir];
@@ -467,22 +442,18 @@ class Robot {
                 return await this.moveForward();
             }
 
-            // U-turn
+            // U-turn: half-block forward → 180° pivot → half-block forward
+            if (this._atBoundary) await this._advanceToCenter();
             await this.turnRight(180);
-            if (this._atBoundary) return this._crossBoundaryInstant();
             return await this.moveForward();
 
         } else {
             // Pivot mode
-            if (diff === 180) {
-                await this.turnRight(180);
-                if (this._atBoundary) return this._crossBoundaryInstant();
-                return await this.moveForward();
-            }
-            // 90° pivot needs cell-centre alignment when at a boundary
+            // 90° and 180° turns: go to cell centre first when at a boundary
             if (this._atBoundary && diff !== 0) await this._advanceToCenter();
             if (diff === 90)       await this.turnRight();
             else if (diff === 270) await this.turnLeft();
+            else if (diff === 180) await this.turnRight(180);
             return await this.moveForward();
         }
     }
