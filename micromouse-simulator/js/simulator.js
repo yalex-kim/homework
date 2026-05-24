@@ -308,8 +308,6 @@ class Simulator {
         bind('hw-decel',         'decel');
         bind('hw-smooth-radius', 'smoothRadius');
 
-        const turnSel = document.getElementById('hw-turn-type');
-        if (turnSel) turnSel.onchange = (e) => { hw.turnType = e.target.value; };
     }
 
     // ── Status bar ───────────────────────────────────────────────────────────
