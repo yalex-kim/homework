@@ -74,7 +74,7 @@ function detectDiag(x, y, curFacing) {
     // the diagonal exit arc (which returns to original heading) would immediately be
     // followed by another arc in the same direction → S-curve visual artifact.
     // Avoid this by not using diagonal for this pattern.
-    if (pairs * 2 < turns.length && turns[pairs * 2] === turns[0]) {
+    if (pairs === 1 && pairs * 2 < turns.length && turns[pairs * 2] === turns[0]) {
         pairs--;
     }
     return pairs >= 1 ? { pairs, firstSign: turns[0] } : null;
