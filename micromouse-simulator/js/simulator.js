@@ -23,32 +23,6 @@ const W = robot.maze.width, H = robot.maze.height;
 const START_X = 0, START_Y = H - 1;
 const DX = {n:0, e:1, s:0, w:-1}, DY = {n:-1, e:0, s:1, w:0};
 
-// ── Phase 1: 목표까지 탐색 ────────────────────────────────────────────────────
-let steps = 0;
-while (!robot.atGoal && steps++ < 3000) {
-    ff.sense(robot);
-    const dir = ff.bestDir(robot.x, robot.y, facing());
-    if (!dir) { console.log('경로 없음!'); break; }
-    await robot.moveTo(dir);
-}
-if (!robot.atGoal) { console.log('목표 도달 실패'); return; }
-console.log(\`Phase 1 완료: \${robot.odometer}칸 / \${robot.elapsedTime.toFixed(2)}s\`);
-
-// ── Phase 2: 출발점으로 귀환하며 추가 탐색 ──────────────────────────────────
-ff.setGoals([[START_X, START_Y]]);
-steps = 0;
-while ((robot.x !== START_X || robot.y !== START_Y) && steps++ < 3000) {
-    ff.sense(robot);
-    const dir = ff.bestDir(robot.x, robot.y, facing());
-    if (!dir) { console.log('귀환 경로 없음!'); break; }
-    await robot.moveTo(dir);
-}
-console.log(\`Phase 2 완료: \${robot.odometer}칸 / \${robot.elapsedTime.toFixed(2)}s\`);
-
-// ── Phase 3: 최적 경로 속도 주행 ─────────────────────────────────────────────
-ff.setGoals([[7,7],[8,7],[7,8],[8,8]]);
-steps = 0;
-
 // Detect alternating R-L or L-R turn pattern (diagonal driving opportunity).
 // Returns { pairs, firstSign } if ≥1 complete alternating pair found, else null.
 function detectDiag(x, y, curFacing) {
@@ -70,34 +44,29 @@ function detectDiag(x, y, curFacing) {
         if (turns[i] === turns[0] && turns[i+1] === -turns[0]) pairs++;
         else break;
     }
-    // If there's a trailing turn in the same direction as firstSign (e.g. L-R-L or R-L-R),
-    // the diagonal exit arc (which returns to original heading) would immediately be
-    // followed by another arc in the same direction → S-curve visual artifact.
-    // Avoid this by not using diagonal for this pattern.
+    // Avoid S-curve: 1-pair diagonal followed by same-direction turn.
     if (pairs === 1 && pairs * 2 < turns.length && turns[pairs * 2] === turns[0]) {
         pairs--;
     }
     return pairs >= 1 ? { pairs, firstSign: turns[0] } : null;
 }
 
-while (!robot.atGoal && steps++ < 3000) {
-    ff.sense(robot);
-    const dir = ff.bestDir(robot.x, robot.y, facing());
-    if (!dir) { console.log('경로 없음!'); break; }
-
+// 아는 길(explored)은 직진 가속 & 대각 주행, 모르는 길은 일반 이동.
+async function smartMove(dir) {
     if (facing() === dir) {
-        // 직진 방향 — 실제 벽 기준으로 연속 직진 칸 수를 계산해 한 번에 가속 이동
+        // 연속 explored 직진 칸 수 계산 후 한 번에 가속 이동
         let cnt = 0, cx = robot.x, cy = robot.y;
         while (cnt < H) {
             if (robot.maze.hasWall(cx, cy, dir)) break;
             const nx = cx + DX[dir], ny = cy + DY[dir];
             if (nx < 0 || nx >= W || ny < 0 || ny >= H) break;
+            if (!robot.maze.explored[ny][nx]) break;
             cx = nx; cy = ny; cnt++;
             if (ff.bestDir(cx, cy, dir) !== dir) break;
         }
         await (cnt >= 2 ? robot.moveForwardFast(cnt) : robot.moveTo(dir));
     } else {
-        // 방향 전환 — 대각선 패턴 감지 후 대각선 주행 시도
+        // 대각선 패턴 감지 후 대각선 주행 시도
         const diag = detectDiag(robot.x, robot.y, facing());
         if (diag) {
             const ok = await robot.moveDiag(diag.pairs, diag.firstSign);
@@ -106,6 +75,38 @@ while (!robot.atGoal && steps++ < 3000) {
             await robot.moveTo(dir);
         }
     }
+}
+
+// ── Phase 1: 목표까지 탐색 ────────────────────────────────────────────────────
+let steps = 0;
+while (!robot.atGoal && steps++ < 3000) {
+    ff.sense(robot);
+    const dir = ff.bestDir(robot.x, robot.y, facing());
+    if (!dir) { console.log('경로 없음!'); break; }
+    await smartMove(dir);
+}
+if (!robot.atGoal) { console.log('목표 도달 실패'); return; }
+console.log(\`Phase 1 완료: \${robot.odometer}칸 / \${robot.elapsedTime.toFixed(2)}s\`);
+
+// ── Phase 2: 출발점으로 귀환하며 추가 탐색 ──────────────────────────────────
+ff.setGoals([[START_X, START_Y]]);
+steps = 0;
+while ((robot.x !== START_X || robot.y !== START_Y) && steps++ < 3000) {
+    ff.sense(robot);
+    const dir = ff.bestDir(robot.x, robot.y, facing());
+    if (!dir) { console.log('귀환 경로 없음!'); break; }
+    await smartMove(dir);
+}
+console.log(\`Phase 2 완료: \${robot.odometer}칸 / \${robot.elapsedTime.toFixed(2)}s\`);
+
+// ── Phase 3: 최적 경로 속도 주행 ─────────────────────────────────────────────
+ff.setGoals([[7,7],[8,7],[7,8],[8,8]]);
+steps = 0;
+while (!robot.atGoal && steps++ < 3000) {
+    ff.sense(robot);
+    const dir = ff.bestDir(robot.x, robot.y, facing());
+    if (!dir) { console.log('경로 없음!'); break; }
+    await smartMove(dir);
 }
 
 if (robot.atGoal) {
