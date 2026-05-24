@@ -423,6 +423,10 @@ class Robot {
         const arcLen  = R_d * Math.PI / 4;
         const pathLen = arcLen + straightLen + arcLen;
 
+        const vMax  = hw ? hw.maxSpeed / hw.cellSize : 3.0;
+        const accel = hw ? hw.accel   / hw.cellSize : 9.0;
+        const decel = hw ? hw.decel   / hw.cellSize : 9.0;
+
         return {
             type: 'diag',
             fromX: this.visX, fromY: this.visY,
@@ -434,14 +438,31 @@ class Robot {
             sign: firstSign, R_d,
             arcLen1: arcLen, straightLen, arcLen2: arcLen,
             pathLen, pathDist: 0, vArc,
+            velStraight: vArc, vMax, accel, decel,
             diagPairs: pairs,
         };
     }
 
     _stepDiag(m) {
-        m.pathDist = Math.min(m.pathDist + m.vArc * CTRL_DT, m.pathLen);
+        const prevD = m.pathDist;
+        const { arcLen1, straightLen } = m;
+
+        // Arcs: fixed vArc; straight: trapezoidal profile from vArc → vMax → vArc
+        let stepVel = m.vArc;
+        if (prevD >= arcLen1 && prevD < arcLen1 + straightLen) {
+            stepVel = m.velStraight;
+            const remaining = (arcLen1 + straightLen) - prevD;
+            const stopDist  = (m.velStraight * m.velStraight - m.vArc * m.vArc) / (2 * m.decel);
+            if (remaining <= stopDist + 1e-9) {
+                m.velStraight = Math.max(m.velStraight - m.decel * CTRL_DT, m.vArc);
+            } else {
+                m.velStraight = Math.min(m.velStraight + m.accel * CTRL_DT, m.vMax);
+            }
+        }
+
+        m.pathDist = Math.min(m.pathDist + stepVel * CTRL_DT, m.pathLen);
         const d = m.pathDist;
-        const { arcLen1, straightLen, arcLen2, arcC1, arcC2, P_mid, P_exit_start,
+        const { arcLen2, arcC1, arcC2, P_mid, P_exit_start,
                 fromAngle, midAngle, sign, R_d } = m;
 
         if (d <= arcLen1) {
