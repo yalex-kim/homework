@@ -122,6 +122,7 @@ class TimePlanner {
                 straightT: n => n * 0.40,
                 turnT:     0.35,
                 uTurnT:    1.50,
+                diagHalfT: 0.18,
             };
         }
         // Straight n cells: trapezoidal profile, start and end at rest.
@@ -139,7 +140,29 @@ class TimePlanner {
         // Matches robot.js moveTo U-turn: advanceToCenter + turnRight(180) + moveForward.
         const uTurnT = 2 * hw.straightCellTime(0.5, 0, 0) + hw.pivotTurnTime(180);
 
-        return { straightT, turnT, uTurnT };
+        // Diagonal pair half-cost (matches _buildDiagMotion / _stepDiag in robot.js):
+        //   45° entry arc  (R_d=0.15 cell, at vTurn)
+        //   + half of the diagonal straight (v0=vTurn → vMax → v1=vTurn)
+        //   + 45° exit arc  (same)
+        // When two consecutive opposite-sign 90° turns form a diagonal R-L or L-R pair,
+        // each turn should cost diagHalfT instead of turnT.  Two diagHalfT edges = diagCost(1).
+        const R_d   = 0.15;                            // diagonal arc radius (cell units)
+        const R_d_m = R_d * hw.cellSize;               // metres
+        const diagArcLen_m = R_d_m * Math.PI / 4;     // 45° arc length
+        const diagArcTime  = diagArcLen_m / vTurn;     // seconds per arc
+
+        // Diagonal straight geometry (cell units), same formula as _buildDiagMotion
+        const c45 = Math.SQRT1_2;
+        const sdx  = 1 - 2 * R_d * (1 - c45);        // ≈ 0.912
+        const sdy  = 1 - 2 * R_d * c45;               // ≈ 0.788
+        const straightLen = Math.sqrt(sdx * sdx + sdy * sdy);  // ≈ 1.205 cell-units
+
+        // Full straight time: v0=vTurn, v1=vTurn (arcs on both ends)
+        const diagStraightTime = hw.straightCellTime(straightLen, vTurn, vTurn);
+        const diagCost1 = 2 * diagArcTime + diagStraightTime;  // total 1-pair diagonal cost
+        const diagHalfT = diagCost1 / 2;               // cost per turn within a diagonal pair
+
+        return { straightT, turnT, uTurnT, diagHalfT };
     }
 
     // ── Core: build edge graph + run both Dijkstras ───────────────────────────
@@ -152,7 +175,7 @@ class TimePlanner {
         // State index encoding
         const enc = (x, y, d) => (y * W + x) * 4 + d;
 
-        const { straightT, turnT, uTurnT } = this._edgeCosts();
+        const { straightT, turnT, uTurnT, diagHalfT } = this._edgeCosts();
 
         // ── Build forward adjacency list ──────────────────────────────────────
         //
@@ -187,6 +210,12 @@ class TimePlanner {
                         const nx = x + _TP_DX[d2], ny = y + _TP_DY[d2];
                         if (nx < 0 || nx >= W || ny < 0 || ny >= H) continue;
                         fwdAdj[s].push({ to: enc(nx, ny, d2), cost: turnT });
+                        // Diagonal half-cost: if the completing opposite turn is also clear
+                        // (R→L or L→R pair), this edge is cheaper as the first half of a diagonal.
+                        // Two diagHalfT edges chain to diagCost(1) < 2×turnT.
+                        if (!this.knownWalls[ny][nx][_TP_DIRS[d]]) {
+                            fwdAdj[s].push({ to: enc(nx, ny, d2), cost: diagHalfT });
+                        }
                     }
 
                     // 180° U-turn — used only when both 90° options are blocked.
