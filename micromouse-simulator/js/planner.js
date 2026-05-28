@@ -121,6 +121,7 @@ class TimePlanner {
             return {
                 straightT: n => n * 0.40,
                 turnT:     0.35,
+                uTurnT:    1.50,
             };
         }
         // Straight n cells: trapezoidal profile, start and end at rest.
@@ -134,7 +135,11 @@ class TimePlanner {
         const arcLen_m = 0.5 * hw.cellSize * Math.PI / 2;   // physical arc length
         const turnT = arcLen_m / vTurn;                      // seconds
 
-        return { straightT, turnT };
+        // U-turn (180° pivot in place): 2×half-cell linear + pivot time.
+        // Matches robot.js moveTo U-turn: advanceToCenter + turnRight(180) + moveForward.
+        const uTurnT = 2 * hw.straightCellTime(0.5, 0, 0) + hw.pivotTurnTime(180);
+
+        return { straightT, turnT, uTurnT };
     }
 
     // ── Core: build edge graph + run both Dijkstras ───────────────────────────
@@ -147,7 +152,7 @@ class TimePlanner {
         // State index encoding
         const enc = (x, y, d) => (y * W + x) * 4 + d;
 
-        const { straightT, turnT } = this._edgeCosts();
+        const { straightT, turnT, uTurnT } = this._edgeCosts();
 
         // ── Build forward adjacency list ──────────────────────────────────────
         //
@@ -182,6 +187,15 @@ class TimePlanner {
                         const nx = x + _TP_DX[d2], ny = y + _TP_DY[d2];
                         if (nx < 0 || nx >= W || ny < 0 || ny >= H) continue;
                         fwdAdj[s].push({ to: enc(nx, ny, d2), cost: turnT });
+                    }
+
+                    // 180° U-turn — used only when both 90° options are blocked.
+                    // Cost = 2×half-cell travel + in-place pivot, matching robot.js moveTo.
+                    const d_opp = (d + 2) % 4;
+                    if (!this.knownWalls[y][x][_TP_DIRS[d_opp]]) {
+                        const nx = x + _TP_DX[d_opp], ny = y + _TP_DY[d_opp];
+                        if (nx >= 0 && nx < W && ny >= 0 && ny < H)
+                            fwdAdj[s].push({ to: enc(nx, ny, d_opp), cost: uTurnT });
                     }
                 }
             }
@@ -252,9 +266,11 @@ class TimePlanner {
 
         // ── Best-direction map ────────────────────────────────────────────────
         //
-        // For each state (x,y,d), look at single-step forward edges only
-        // (dist = 1 cell) and pick the neighbour with minimum distBwd.
-        // This is the direction the robot should move to minimise total time.
+        // For each state (x,y,d), consider ALL forward edges (including multi-cell
+        // straight and U-turn).  Multi-cell straight edges share the same direction
+        // as the source heading, so they all return the same dir char; Dijkstra
+        // picks whichever k gives the lowest cost+distBwd, which is what we want.
+        // U-turn edges return the opposite direction char.
 
         this._bestDirM = Array.from({length: H}, () =>
             Array.from({length: W}, () => [null, null, null, null])
@@ -267,10 +283,6 @@ class TimePlanner {
                     let best = INF, bestCh = null;
 
                     for (const {to, cost} of fwdAdj[s]) {
-                        // Single-step only: straight k=1 or any 90° turn
-                        const toX = ((to >> 2) % W), toY = ((to >> 2) / W | 0);
-                        if (Math.abs(toX - x) + Math.abs(toY - y) !== 1) continue;
-
                         const total = cost + distBwd[to];
                         if (total < best) {
                             best   = total;
