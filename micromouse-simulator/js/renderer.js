@@ -108,7 +108,7 @@ class Renderer {
                 ctx.fillRect(px+1, py+1, cellSize-2, cellSize-2);
 
                 ctx.fillStyle = `rgba(${red},${green},${blue},${txtAlpha})`;
-                ctx.fillText(d, cx, cy);
+                ctx.fillText(Number.isInteger(d) ? d : d.toFixed(1), cx, cy);
             }
         }
     }

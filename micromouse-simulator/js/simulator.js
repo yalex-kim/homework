@@ -122,7 +122,7 @@ class Simulator {
         this.hardware = new HardwareProfile();
         this.robot    = new Robot(this.maze, this.hardware);
         this.robot.speed = 1;
-        this.ff       = new FloodFill(this.maze, this.hardware);
+        this.ff       = new TimePlanner(this.maze, this.hardware);
         this.renderer = null;
         this._editor  = null;
         this._running = false;
@@ -222,7 +222,7 @@ class Simulator {
         }
         this.robot = new Robot(this.maze, this.hardware);
         this.robot.speed = parseInt(document.getElementById('speed-slider').value, 10);
-        this.ff = new FloodFill(this.maze, this.hardware);
+        this.ff = new TimePlanner(this.maze, this.hardware);
         this.renderer.updateMaze(this.maze);
         this.renderer.updateRobot(this.robot);
         this.renderer.updateFloodFill(this.ff);
@@ -270,7 +270,7 @@ class Simulator {
         this.robot.stop();
         setTimeout(() => {
             this.robot.reset();
-            this.ff = new FloodFill(this.maze, this.hardware);
+            this.ff = new TimePlanner(this.maze, this.hardware);
             this.renderer.updateFloodFill(this.ff);
             this._lapActive      = false;
             this._lapPrevAtStart = true;
