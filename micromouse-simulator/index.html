@@ -32,6 +32,7 @@
                 <option value="random">🔀 랜덤 생성</option>
             </select>
             <button id="btn-new-maze" class="btn-secondary">🔀 새 미로</button>
+            <button id="btn-lang"       class="btn-secondary">⚙ JS 모드</button>
             <button id="btn-ff-overlay" class="btn-secondary">FF 오버레이</button>
             <button id="btn-wheels" class="btn-secondary active">바퀴 궤적</button>
             <a href="turn-simulator.html" class="btn-secondary" style="text-decoration:none;display:inline-flex;align-items:center;">📐 턴 시뮬</a>
@@ -121,21 +122,38 @@
             <div id="editor-container">
                 <textarea id="code-editor"></textarea>
             </div>
-            <div id="api-ref">
-                <div class="api-title">API 레퍼런스</div>
+            <!-- JS API 레퍼런스 -->
+            <div id="api-ref-js" id="api-ref">
+                <div class="api-title">API 레퍼런스 (JS)</div>
                 <div class="api-grid">
                     <div class="api-row"><code>ff.sense(robot)</code><span class="desc">벽 감지 후 FF 재계산</span></div>
                     <div class="api-row"><code>await robot.moveTo('n'|'e'|'s'|'w')</code><span class="desc">절대 방향 이동</span></div>
                     <div class="api-row"><code>ff.bestDir(x, y, facing)</code><span class="desc">최적 방향 반환</span></div>
-                    <div class="api-row"><code>await robot.moveForward()</code><span class="desc">한 칸 전진</span></div>
+                    <div class="api-row"><code>await robot.moveForwardFast(n)</code><span class="desc">n칸 연속 직진</span></div>
                     <div class="api-row"><code>ff.getDistMap()[y][x]</code><span class="desc">역방향 추산 비용</span></div>
-                    <div class="api-row"><code>await robot.smoothTurnRight/Left()</code><span class="desc">원호 턴+전진</span></div>
-                    <div class="api-row"><code>robot.sensors.front/back/left/right</code><span class="desc">벽 여부 (true=벽)</span></div>
-                    <div class="api-row"><code>await robot.turnLeft/Right()</code><span class="desc">pivot 회전 90°</span></div>
-                    <div class="api-row"><code>robot.sensors.gyro</code><span class="desc">각속도 °/s (자이로)</span></div>
+                    <div class="api-row"><code>robot.sensors.front/right/left</code><span class="desc">벽 여부 (true=벽)</span></div>
                     <div class="api-row"><code>robot.elapsedTime</code><span class="desc">물리 경과 시간 (초)</span></div>
                     <div class="api-row"><code>robot.atGoal</code><span class="desc">목표 도달 여부</span></div>
-                    <div class="api-row"><code>robot.odometer</code><span class="desc">총 이동 칸 수</span></div>
+                </div>
+            </div>
+            <!-- C API 레퍼런스 -->
+            <div id="api-ref-c" style="display:none">
+                <div class="api-title">API 레퍼런스 (C)</div>
+                <div class="api-grid">
+                    <div class="api-row"><code>ff_sense()</code><span class="desc">벽 감지 & FF 업데이트</span></div>
+                    <div class="api-row"><code>ff_best_dir(x, y, facing)</code><span class="desc">최적 방향 char 반환</span></div>
+                    <div class="api-row"><code>ff_set_goals(goals, count)</code><span class="desc">목표 셀 변경</span></div>
+                    <div class="api-row"><code>move_to(dir)</code><span class="desc">회전+1칸 이동</span></div>
+                    <div class="api-row"><code>move_fast(n)</code><span class="desc">n칸 연속 직진</span></div>
+                    <div class="api-row"><code>move_diag(pairs, sign)</code><span class="desc">대각 주행 (bool 반환)</span></div>
+                    <div class="api-row"><code>robot_x() / robot_y()</code><span class="desc">현재 셀 좌표</span></div>
+                    <div class="api-row"><code>robot_facing()</code><span class="desc">방향 char ('n'/'e'/'s'/'w')</span></div>
+                    <div class="api-row"><code>robot_at_goal()</code><span class="desc">목표 도달 여부</span></div>
+                    <div class="api-row"><code>has_wall(x, y, dir)</code><span class="desc">벽 유무</span></div>
+                    <div class="api-row"><code>cell_explored(x, y)</code><span class="desc">탐색 여부</span></div>
+                    <div class="api-row"><code>dx(d) / dy(d)</code><span class="desc">방향 델타</span></div>
+                    <div class="api-row"><code>in_maze(x, y)</code><span class="desc">범위 체크</span></div>
+                    <div class="api-row"><code>log(msg)</code><span class="desc">콘솔 출력</span></div>
                 </div>
             </div>
         </div>
@@ -143,7 +161,7 @@
     </div><!-- #main -->
 </div><!-- #app -->
 
-<!-- Load order matters: maze → mazedata → hardware → floodfill → planner → robot → renderer → simulator -->
+<!-- Load order matters: maze → mazedata → hardware → floodfill → planner → robot → renderer → c_bridge → simulator -->
 <script src="js/maze.js"></script>
 <script src="js/mazedata.js"></script>
 <script src="js/hardware.js"></script>
@@ -151,6 +169,7 @@
 <script src="js/planner.js"></script>
 <script src="js/robot.js"></script>
 <script src="js/renderer.js"></script>
+<script src="js/c_bridge.js"></script>
 <script src="js/simulator.js"></script>
 </body>
 </html>

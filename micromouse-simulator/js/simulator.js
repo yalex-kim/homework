@@ -113,6 +113,119 @@ if (robot.atGoal) {
     console.log(\`완료! \${robot.odometer}칸 / \${robot.elapsedTime.toFixed(2)}s\`);
 }`;
 
+// ── C 기본 알고리즘 ────────────────────────────────────────────────────────────
+const DEFAULT_C_ALGORITHM =
+`// ===== 마이크로마우스 3단계 탐색 알고리즘 (C 버전) =====
+//
+// Phase 1: 출발 → 목표  (플러드 필 탐색)
+// Phase 2: 목표 → 출발  (귀환하며 추가 벽 탐색)
+// Phase 3: 최적 경로 속도 주행
+//
+// API (c_sim 제공):
+//   ff_sense()                     → 벽 감지 & FF 업데이트
+//   ff_best_dir(x, y, facing)      → 최적 방향 반환 ('n'/'e'/'s'/'w', 없으면 0)
+//   ff_set_goals(goals, count)     → 목표 셀 변경
+//   ff_dist(x, y)                  → 목표까지 추산 비용
+//   robot_x() / robot_y()         → 현재 위치
+//   robot_facing()                 → 현재 방향 char
+//   robot_at_goal()                → 목표 도달 여부
+//   maze_w() / maze_h()           → 미로 크기
+//   has_wall(x, y, dir)           → 벽 유무
+//   cell_explored(x, y)           → 탐색 여부
+//   dx(dir) / dy(dir)             → 방향 델타
+//   in_maze(x, y)                 → 범위 체크
+//   move_to(dir)                  → 회전+1칸 이동 (blocking)
+//   move_fast(n)                  → n칸 연속 직진 (blocking)
+//   move_diag(pairs, sign)        → 대각 주행, bool 반환 (blocking)
+//   log(msg)                      → 콘솔 출력
+
+typedef struct { int pairs; int first_sign; } DiagResult;
+
+DiagResult detect_diag(int x, int y, char cur) {
+    int turns[16];
+    int n = 0, cx = x, cy = y;
+    for (int i = 0; i < 16; i++) {
+        char nd = ff_best_dir(cx, cy, cur);
+        if (!nd || nd == cur) break;
+        int diff = (dir_angle(nd) - dir_angle(cur) + 360) % 360;
+        if (diff != 90 && diff != 270) break;
+        turns[n++] = (diff == 90) ? 1 : -1;
+        cx += dx(nd); cy += dy(nd); cur = nd;
+        if (!cell_explored(cx, cy)) break;
+    }
+    if (n < 2 || turns[0] == turns[1]) return (DiagResult){0, 0};
+    int pairs = 0;
+    for (int i = 0; i+1 < n; i += 2) {
+        if (turns[i] == turns[0] && turns[i+1] == -turns[0]) pairs++;
+        else break;
+    }
+    if (pairs == 1 && pairs*2 < n && turns[pairs*2] == turns[0]) pairs--;
+    return pairs >= 1 ? (DiagResult){pairs, turns[0]} : (DiagResult){0, 0};
+}
+
+void smart_move(char dir) {
+    if (robot_facing() == dir) {
+        int cnt = 0, cx = robot_x(), cy = robot_y();
+        while (cnt < maze_h()) {
+            if (has_wall(cx, cy, dir)) break;
+            int nx = cx + dx(dir), ny = cy + dy(dir);
+            if (!in_maze(nx, ny)) break;
+            if (!cell_explored(nx, ny)) break;
+            cx = nx; cy = ny; cnt++;
+            if (ff_best_dir(cx, cy, dir) != dir) break;
+        }
+        if (cnt >= 2) move_fast(cnt);
+        else move_to(dir);
+    } else {
+        DiagResult diag = detect_diag(robot_x(), robot_y(), robot_facing());
+        if (diag.pairs >= 1) {
+            bool ok = move_diag(diag.pairs, diag.first_sign);
+            if (!ok) move_to(dir);
+        } else {
+            move_to(dir);
+        }
+    }
+}
+
+void run() {
+    int H = maze_h();
+
+    // ── Phase 1: 목표까지 탐색 ──────────────────────────────────────────────
+    int steps = 0;
+    while (!robot_at_goal() && steps++ < 3000) {
+        ff_sense();
+        char dir = ff_best_dir(robot_x(), robot_y(), robot_facing());
+        if (!dir) { log("경로 없음!"); break; }
+        smart_move(dir);
+    }
+    if (!robot_at_goal()) { log("목표 도달 실패"); return; }
+    log("Phase 1 완료");
+
+    // ── Phase 2: 출발점으로 귀환 ────────────────────────────────────────────
+    int start_goals[1][2] = {{0, H-1}};
+    ff_set_goals(start_goals, 1);
+    steps = 0;
+    while ((robot_x() != 0 || robot_y() != H-1) && steps++ < 3000) {
+        ff_sense();
+        char dir = ff_best_dir(robot_x(), robot_y(), robot_facing());
+        if (!dir) { log("귀환 경로 없음!"); break; }
+        smart_move(dir);
+    }
+    log("Phase 2 완료");
+
+    // ── Phase 3: 최적 경로 속도 주행 ────────────────────────────────────────
+    int center_goals[4][2] = {{7,7},{8,7},{7,8},{8,8}};
+    ff_set_goals(center_goals, 4);
+    steps = 0;
+    while (!robot_at_goal() && steps++ < 3000) {
+        ff_sense();
+        char dir = ff_best_dir(robot_x(), robot_y(), robot_facing());
+        if (!dir) { log("경로 없음!"); break; }
+        smart_move(dir);
+    }
+    if (robot_at_goal()) log("완료!");
+}`;
+
 // ── Simulator controller ──────────────────────────────────────────────────────
 const AsyncFunction = Object.getPrototypeOf(async function () {}).constructor;
 
@@ -127,12 +240,13 @@ class Simulator {
         this._editor  = null;
         this._running = false;
         this._lastTime = 0;
+        this._langMode = 'js';   // 'js' | 'c'
 
         // Lap timer
         this._lapActive      = false;
         this._lapStart       = 0;
-        this._lapPrevAtStart = true;   // robot begins at start
-        this._lapHistory     = [];     // sorted ascending (fastest first)
+        this._lapPrevAtStart = true;
+        this._lapHistory     = [];
     }
 
     init() {
@@ -147,12 +261,30 @@ class Simulator {
         );
         this._editor.setValue(DEFAULT_ALGORITHM);
 
+        // 언어 토글 (JS ↔ C)
+        const btnLang = document.getElementById('btn-lang');
+        if (btnLang) {
+            btnLang.onclick = () => {
+                this._langMode = (this._langMode === 'js') ? 'c' : 'js';
+                const isC = (this._langMode === 'c');
+                btnLang.textContent = isC ? '⚙ C 모드' : '⚙ JS 모드';
+                btnLang.classList.toggle('lang-c', isC);
+                this._editor.setOption('mode', isC ? 'text/x-csrc' : 'javascript');
+                this._editor.setValue(isC ? DEFAULT_C_ALGORITHM : DEFAULT_ALGORITHM);
+                // API 레퍼런스 전환
+                document.getElementById('api-ref-js').style.display = isC ? 'none' : '';
+                document.getElementById('api-ref-c').style.display  = isC ? '' : 'none';
+            };
+        }
+
         // Toolbar buttons
         document.getElementById('btn-start').onclick    = () => this.start();
         document.getElementById('btn-stop').onclick     = () => this.stop();
         document.getElementById('btn-reset').onclick    = () => this.reset();
         document.getElementById('btn-new-maze').onclick   = () => this.newMaze();
-        document.getElementById('btn-default').onclick    = () => this._editor.setValue(DEFAULT_ALGORITHM);
+        document.getElementById('btn-default').onclick    = () => {
+            this._editor.setValue(this._langMode === 'c' ? DEFAULT_C_ALGORITHM : DEFAULT_ALGORITHM);
+        };
         document.getElementById('btn-clear-laps').onclick = () => {
             this._lapHistory     = [];
             this._lapActive      = false;
@@ -241,7 +373,12 @@ class Simulator {
         this._setStatus('실행 중...', 'running');
 
         try {
-            const fn = new AsyncFunction('robot', 'ff', this._editor.getValue());
+            let jsCode = this._editor.getValue();
+            if (this._langMode === 'c') {
+                // C 코드를 async JS 로 변환 후 run() 을 호출
+                jsCode = transpileC(jsCode) + '\nawait run();';
+            }
+            const fn = new AsyncFunction('robot', 'ff', jsCode);
             await fn(this.robot, this.ff);
 
             if (this.robot.atGoal) {
